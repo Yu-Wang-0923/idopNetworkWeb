@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "idopnetwork-web-backend"
+version = "0.1.0"
+description = "idopNetwork Web backend: API, job queue, and computational tasks"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.4",
+    "python-multipart>=0.0.9",
+    "itsdangerous>=2.2",
+    "pandas>=2.0",
+    "idopnetwork @ git+https://github.com/Yu-Wang-0923/idopNetworkAPP.git@fc5dc2f5a903c7fdbdadeef903771f9852f05b8c#subdirectory=packages/idopnetwork",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
