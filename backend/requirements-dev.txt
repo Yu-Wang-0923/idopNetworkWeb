@@ -12,3 +12,6 @@ httpx>=0.27
 # Core algorithm library, pinned to the old repository's current master commit.
 # Installed read-only from the public repository; the old repository is never modified.
 idopnetwork @ git+https://github.com/Yu-Wang-0923/idopNetworkAPP.git@fc5dc2f5a903c7fdbdadeef903771f9852f05b8c#subdirectory=packages/idopnetwork
+
+# FunClu estimator, provided and authorized by its author; same pin as pyproject.toml.
+fast-funclu @ git+https://github.com/sccycy66-sudo/Fast-Funclu.git@583cebbeb8416678f06d979e03b7461701d1c74d
