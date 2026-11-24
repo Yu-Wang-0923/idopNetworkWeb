@@ -31,5 +31,8 @@
   "funclu.message.charting": {"zh": "生成簇轮廓图", "en": "Rendering cluster profiles"},
   "funclu.message.bic": {"zh": "拟合 K = {{k}}（{{index}}/{{total}}）", "en": "Fitting K = {{k}} ({{index}}/{{total}})"},
   "funclu.message.done": {"zh": "FunClu 完成，K = {{k}}", "en": "FunClu finished with K = {{k}}"},
-  "funclu.message.bic_done": {"zh": "BIC 扫描完成（{{k_count}} 个 K × {{model_count}} 种协方差结构），推荐 {{model}} · K = {{best}}", "en": "BIC scan finished ({{k_count}} K values × {{model_count}} covariance structures); recommended {{model}}, K = {{best}}"}
+  "funclu.message.bic_done": {"zh": "BIC 扫描完成（{{k_count}} 个 K × {{model_count}} 种协方差结构），推荐 {{model}} · K = {{best}}", "en": "BIC scan finished ({{k_count}} K values × {{model_count}} covariance structures); recommended {{model}}, K = {{best}}"},
+  "funclu.message.bic_boundary_upper": {"zh": "推荐的 K = {{k}} 是本次扫描的最大 K，BIC 可能还没到最低点；建议增大 k_max 后重新扫描。", "en": "The recommended K = {{k}} is the largest K scanned, so BIC may not have reached its minimum. Increase k_max and scan again."},
+  "funclu.message.bic_boundary_lower": {"zh": "推荐的 K = {{k}} 是本次扫描的最小 K，BIC 可能还没到最低点；建议减小 k_min 后重新扫描。", "en": "The recommended K = {{k}} is the smallest K scanned, so BIC may not have reached its minimum. Decrease k_min and scan again."},
+  "funclu.message.bic_min_size_violated": {"zh": "没有候选模型满足最小簇大小 {{min_size}}，推荐的是不受该约束时 BIC 最低的模型。", "en": "No candidate meets the minimum cluster size of {{min_size}}; the recommendation is the lowest-BIC model without that constraint."}
 }

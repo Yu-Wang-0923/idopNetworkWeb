@@ -19,6 +19,7 @@ from app.pure.funclu import (
     save_bic_comparison,
     scan_bic,
 )
+from app.tasks.common import write_text
 
 
 class FunCluKParams(BaseModel):
@@ -88,15 +89,24 @@ def _prepare(ctx: TaskContext, path: Path):
     return curve_sample, quasi_dynamic, conditions, frames, features
 
 
-def _write_text(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
 def _finite(value) -> float | None:
     number = float(value)
     return number if np.isfinite(number) else None
+
+
+def bic_boundary_side(k_values: list[int], best_k: int, n_features: int) -> str | None:
+    """Name the end of the scanned K range that the recommendation sits on.
+
+    Returns ``"upper"`` or ``"lower"`` only when the scan could be widened on
+    that side (K stays within 1..n_features), otherwise ``None``.
+    """
+    if len(k_values) < 2:
+        return None
+    if best_k == max(k_values) and best_k < n_features:
+        return "upper"
+    if best_k == min(k_values) and best_k > 1:
+        return "lower"
+    return None
 
 
 def _parameter_tables(model, conditions: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -227,7 +237,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         (mu_df, "mu_params.csv"),
         (cov_df, "cov_params.csv"),
     ):
-        artifact_path = _write_text(
+        artifact_path = write_text(
             ctx.output_dir / "tables" / name, frame.to_csv(index=False)
         )
         ctx.add_artifact(
@@ -243,7 +253,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
     html, member_cap = _render_cluster_profiles(
         curve_sample, labels, common_cols, params.n_components, conditions
     )
-    chart_path = _write_text(
+    chart_path = write_text(
         ctx.output_dir / "charts" / "cluster_profiles.html", html
     )
     ctx.add_artifact(
@@ -284,7 +294,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         },
         "chart_member_cap": member_cap,
     }
-    summary_path = _write_text(
+    summary_path = write_text(
         ctx.output_dir / "funclu_k_summary.json",
         json.dumps(summary, ensure_ascii=False, indent=2),
     )
@@ -356,9 +366,23 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
     raw_best_model = str(raw_best_row["covariance_model"])
     eligible_count = int(bic_df["eligible"].sum())
     min_size_violated = eligible_count == 0
+    k_values = sorted(int(k) for k in bic_df["K"].unique())
+    boundary_side = bic_boundary_side(k_values, best_k, features)
+    if boundary_side is not None:
+        ctx.log(
+            f"funclu.message.bic_boundary_{boundary_side}",
+            level="warning",
+            k=best_k,
+        )
+    if min_size_violated:
+        ctx.log(
+            "funclu.message.bic_min_size_violated",
+            level="warning",
+            min_size=params.min_cluster_size,
+        )
 
     ctx.progress("funclu.stage.export", 0.90, "funclu.message.exporting")
-    csv_path = _write_text(
+    csv_path = write_text(
         ctx.output_dir / "funclu_bic_results.csv", bic_df.to_csv(index=False)
     )
     ctx.add_artifact(
@@ -405,19 +429,20 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "covariance_models": list(params.covariance_models),
         "init_params": params.init_params,
         "use_minibatch_kmeans": bool(params.use_minibatch_kmeans),
-        "k_values": sorted(int(k) for k in bic_df["K"].unique()),
+        "k_values": k_values,
         "recommended_k": best_k,
         "selected_model": selected_model,
         "raw_best_k": raw_best,
         "raw_best_model": raw_best_model,
-        "selected_at_boundary": best_k in {k_min, k_max},
+        "selected_at_boundary": boundary_side is not None,
+        "boundary_side": boundary_side,
         "eligible_count": eligible_count,
         "min_size_violated": min_size_violated,
         "best_row": best_row,
         "rows": int(len(bic_df)),
         "params": params.model_dump(),
     }
-    summary_path = _write_text(
+    summary_path = write_text(
         ctx.output_dir / "funclu_bic_summary.json",
         json.dumps(summary, ensure_ascii=False, indent=2),
     )

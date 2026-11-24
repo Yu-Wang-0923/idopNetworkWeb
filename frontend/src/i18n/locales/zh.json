@@ -94,6 +94,7 @@
   "run.cancelled": "已请求取消",
   "run.error": "错误详情",
   "run.queuedHint": "任务已排队，等待 worker 处理。",
+  "run.bicRecommended": "BIC 推荐：{{model}} · K = {{k}}（本次扫描 K = {{kmin}}–{{kmax}}）",
   "artifact.download": "下载",
   "artifact.preview": "预览",
   "artifact.previewTable": "预览表格",

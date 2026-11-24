@@ -23,7 +23,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import HtmlArtifactFrame from "../components/HtmlArtifactFrame";
 import StatusTag from "../components/StatusTag";
-import type { Artifact, LogEntry, RunMessage } from "../types";
+import type { Artifact, BicSummary, LogEntry, RunMessage } from "../types";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -95,6 +95,15 @@ export default function RunDetailPage() {
   });
   const runStatus = runQuery.data?.status;
   const artifactList = runQuery.data?.artifacts;
+  const bicSummaryId = artifactList?.find(
+    (item) => item.semantic_type === "funclu_bic_summary",
+  )?.id;
+  const bicSummaryQuery = useQuery({
+    queryKey: ["artifact-json", bicSummaryId],
+    queryFn: () => api.artifactJson<BicSummary>(bicSummaryId ?? ""),
+    enabled: Boolean(bicSummaryId),
+    staleTime: Infinity,
+  });
   useEffect(() => {
     if (!artifactList) {
       return;
@@ -160,6 +169,30 @@ export default function RunDetailPage() {
   const chartArtifact =
     htmlArtifacts.find((item) => item.id === selectedChart) ?? htmlArtifacts[0];
 
+  const bicSummary = bicSummaryQuery.data;
+  // Summaries written before boundary_side existed only carry selected_at_boundary.
+  const bicBoundary =
+    bicSummary?.boundary_side !== undefined
+      ? bicSummary.boundary_side
+      : bicSummary?.selected_at_boundary
+        ? bicSummary.recommended_k === bicSummary.k_max
+          ? "upper"
+          : "lower"
+        : null;
+  const bicWarnings: string[] = [];
+  if (bicSummary && bicBoundary) {
+    bicWarnings.push(
+      t(`funclu.message.bic_boundary_${bicBoundary}`, { k: bicSummary.recommended_k }),
+    );
+  }
+  if (bicSummary?.min_size_violated) {
+    bicWarnings.push(
+      t("funclu.message.bic_min_size_violated", {
+        min_size: bicSummary.params?.min_cluster_size ?? 1,
+      }),
+    );
+  }
+
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
       <Space>
@@ -220,6 +253,28 @@ export default function RunDetailPage() {
           </Space>
         </Space>
       </Card>
+
+      {bicSummary ? (
+        <Alert
+          type={bicWarnings.length ? "warning" : "success"}
+          showIcon
+          message={t("run.bicRecommended", {
+            model: bicSummary.selected_model,
+            k: bicSummary.recommended_k,
+            kmin: bicSummary.k_values[0],
+            kmax: bicSummary.k_values[bicSummary.k_values.length - 1],
+          })}
+          description={
+            bicWarnings.length ? (
+              <Space direction="vertical" size={2}>
+                {bicWarnings.map((text) => (
+                  <span key={text}>{text}</span>
+                ))}
+              </Space>
+            ) : undefined
+          }
+        />
+      ) : null}
 
       {run.error_text ? (
         <Alert
@@ -382,8 +437,8 @@ export default function RunDetailPage() {
             <div
               key={entry.seq}
               className={
-                entry.level === "error"
-                  ? "log-list__entry log-list__entry--error"
+                entry.level === "error" || entry.level === "warning"
+                  ? `log-list__entry log-list__entry--${entry.level}`
                   : "log-list__entry"
               }
             >

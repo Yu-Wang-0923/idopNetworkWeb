@@ -12,6 +12,7 @@ from app.jobs.context import TaskContext
 from app.jobs.registry import StageSpec, TaskSpec, register
 from app.pure.charts import curve_fitting_html, ecg_fitting_html
 from app.pure.curve_fitting import build_fitting_export, fit_uploaded_csv
+from app.tasks.common import write_text
 
 
 class CurveFittingParams(BaseModel):
@@ -51,12 +52,6 @@ def _finite_features(quasi, samples) -> list[str]:
     values = samples.to_numpy(dtype=float)
     mask = np.isfinite(values).all(axis=0)
     return [str(column) for column, keep in zip(quasi.columns, mask) if keep]
-
-
-def _write_text(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
 
 
 def _run_curve_fitting(ctx: TaskContext) -> None:
@@ -169,7 +164,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
             ("curve_sample", "samples"),
             ("quasi_dynamic", "quasidynamic"),
         ):
-            path = _write_text(
+            path = write_text(
                 ctx.output_dir / "tables" / f"{base}_{suffix}.csv",
                 tables[table_key].to_csv(index=True),
             )
@@ -187,7 +182,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
         "files": summary_files,
         "failed": failures,
     }
-    summary_path = _write_text(
+    summary_path = write_text(
         ctx.output_dir / "curve_fitting_summary.json",
         json.dumps(summary, ensure_ascii=False, indent=2),
     )
@@ -225,7 +220,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                     raw_text=f"{name}: ECG figure failed: {exc}",
                 )
                 continue
-            path = _write_text(
+            path = write_text(
                 ctx.output_dir / "charts" / base / "ecg_fitting.html",
                 html,
             )
@@ -264,7 +259,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                 features,
             )
             html = curve_fitting_html.render(panels)
-            path = _write_text(
+            path = write_text(
                 ctx.output_dir / "charts" / base / "curve_fitting.html",
                 html,
             )
@@ -292,7 +287,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                     common,
                 )
                 html = curve_fitting_html.render(panels)
-                path = _write_text(ctx.output_dir / "charts" / "compare.html", html)
+                path = write_text(ctx.output_dir / "charts" / "compare.html", html)
                 ctx.add_artifact(
                     path,
                     "charts/compare.html",

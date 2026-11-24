@@ -71,6 +71,19 @@ export interface RunDetail extends RunSummary {
 
 export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
+export interface BicSummary {
+  recommended_k: number;
+  selected_model: string;
+  k_values: number[];
+  k_min: number;
+  k_max: number;
+  selected_at_boundary?: boolean;
+  /** Missing in summaries written before the field existed. */
+  boundary_side?: "upper" | "lower" | null;
+  min_size_violated?: boolean;
+  params?: { min_cluster_size?: number };
+}
+
 export interface LogEntry {
   seq: number;
   ts: string;

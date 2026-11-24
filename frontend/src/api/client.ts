@@ -95,4 +95,6 @@ export const api = {
     request<InspectResult>(`/artifacts/${artifactId}/inspect`),
   artifactTable: (artifactId: string, limit = 500) =>
     request<ArtifactTable>(`/artifacts/${artifactId}/table?limit=${limit}`),
+  artifactJson: <T>(artifactId: string) =>
+    request<T>(`/artifacts/${artifactId}/content`),
 };

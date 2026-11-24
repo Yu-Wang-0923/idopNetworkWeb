@@ -154,6 +154,7 @@ def test_funclu_bic_end_to_end(client):
 
     csv_artifact = artifact(detail, "funclu_bic_results.csv")
     download = client.get(f"/api/artifacts/{csv_artifact['id']}/download")
+    assert b"\r\r\n" not in download.content
     frame = pd.read_csv(io.BytesIO(download.content))
     assert set(frame["K"]) == {2, 3}
     assert set(frame["covariance_model"]) == {"S1", "S4"}
@@ -191,6 +192,29 @@ def test_funclu_bic_end_to_end(client):
     assert payload["eligible_count"] >= 1
     assert payload["best_row"]["AIC"] is not None
     assert payload["best_row"]["covariance_model"] == payload["selected_model"]
+
+    # 4 shared features scanned at K = 2..3: either end can still be widened.
+    side = "upper" if payload["recommended_k"] == 3 else "lower"
+    assert payload["boundary_side"] == side
+    assert payload["selected_at_boundary"] is True
+    logs = client.get(f"/api/runs/{run['id']}/logs").json()
+    assert any(
+        entry["level"] == "warning"
+        and entry["message_key"] == f"funclu.message.bic_boundary_{side}"
+        and entry["message_params"]["k"] == payload["recommended_k"]
+        for entry in logs
+    )
+
+
+def test_bic_boundary_side_only_flags_extendable_ends():
+    from app.tasks.funclu import bic_boundary_side
+
+    assert bic_boundary_side([2, 3, 4], 4, n_features=65) == "upper"
+    assert bic_boundary_side([2, 3, 4], 2, n_features=65) == "lower"
+    assert bic_boundary_side([2, 3, 4], 3, n_features=65) is None
+    assert bic_boundary_side([1, 2, 3], 1, n_features=65) is None
+    assert bic_boundary_side([2, 3, 4], 4, n_features=4) is None
+    assert bic_boundary_side([3], 3, n_features=65) is None
 
 
 def test_funclu_k_supports_shared_covariance(client):

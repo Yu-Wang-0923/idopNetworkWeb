@@ -151,6 +151,10 @@ a {
   color: #ffb4b4;
 }
 
+.log-list__entry--warning {
+  color: #ffd88a;
+}
+
 .artifact-frame {
   width: 100%;
   border: 1px solid #dbe6f3;

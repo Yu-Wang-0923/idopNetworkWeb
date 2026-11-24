@@ -124,6 +124,11 @@ def test_quasi_end_to_end(client):
     assert "sandbox" in content.headers["content-security-policy"]
     assert "panels" in content.text
 
+    table = artifact(detail, "tables/alpha_params.csv")
+    raw = client.get(f"/api/artifacts/{table['id']}/download").content
+    assert b"\r\r\n" not in raw
+    assert len(pd.read_csv(io.BytesIO(raw))) == 2
+
 
 def test_duplicate_condition_names_fail(client):
     content = b"sample,a\ns1,1\ns2,2\ns3,3\n"

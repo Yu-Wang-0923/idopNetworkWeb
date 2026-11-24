@@ -94,6 +94,7 @@
   "run.cancelled": "Cancellation requested",
   "run.error": "Error details",
   "run.queuedHint": "The run is queued and waiting for a worker.",
+  "run.bicRecommended": "BIC recommendation: {{model}}, K = {{k}} (scanned K = {{kmin}}–{{kmax}})",
   "artifact.download": "Download",
   "artifact.preview": "Preview",
   "artifact.previewTable": "Preview table",
