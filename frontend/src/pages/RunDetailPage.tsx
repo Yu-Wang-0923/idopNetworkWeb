@@ -1,14 +1,16 @@
 import { ArrowLeftOutlined, StopOutlined, RedoOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   App as AntdApp,
   Button,
   Card,
   Descriptions,
+  Image,
   List,
   Progress,
+  Select,
   Space,
   Tag,
   Typography,
@@ -67,7 +69,26 @@ export default function RunDetailPage() {
     onError: () => message.error(t("common.error")),
   });
 
+  const [selectedChart, setSelectedChart] = useState<string | null>(null);
   const runStatus = runQuery.data?.status;
+  const artifactList = runQuery.data?.artifacts;
+  useEffect(() => {
+    if (!artifactList) {
+      return;
+    }
+    const charts = artifactList
+      .filter((item) => item.kind === "html")
+      .sort(
+        (a, b) =>
+          Number(a.logical_name.includes("compare")) -
+            Number(b.logical_name.includes("compare")) ||
+          a.logical_name.localeCompare(b.logical_name),
+      );
+    if (charts.length && !charts.some((item) => item.id === selectedChart)) {
+      setSelectedChart(charts[0].id);
+    }
+  }, [artifactList, selectedChart]);
+
   useEffect(() => {
     if (runStatus && !isActive(runStatus)) {
       void queryClient.invalidateQueries({ queryKey: ["logs", runId] });
@@ -86,6 +107,35 @@ export default function RunDetailPage() {
   const translatedMessage = run.message.key
     ? t(run.message.key, messageParams)
     : "";
+
+  const htmlArtifacts = run.artifacts
+    .filter((item) => item.kind === "html")
+    .sort(
+      (a, b) =>
+        Number(a.logical_name.includes("compare")) -
+          Number(b.logical_name.includes("compare")) ||
+        a.logical_name.localeCompare(b.logical_name),
+    );
+  const pngArtifacts = run.artifacts.filter((item) => item.kind === "png");
+  const svgArtifacts = run.artifacts.filter((item) => item.kind === "svg");
+  const leadOrder = ["I", "II", "III", "aVR", "aVL", "aVF", "V1", "V2", "V3", "V4", "V5", "V6"];
+  const leadRank = (name: string) => {
+    const match = name.match(/\/([^/]+)_fitting\.(?:png|svg)$/);
+    const index = match ? leadOrder.indexOf(match[1]) : -1;
+    return index === -1 ? leadOrder.length : index;
+  };
+  const previewImages = (pngArtifacts.length ? pngArtifacts : svgArtifacts)
+    .slice()
+    .sort(
+      (a, b) =>
+        leadRank(a.logical_name) - leadRank(b.logical_name) ||
+        a.logical_name.localeCompare(b.logical_name),
+    );
+  const downloadArtifacts = run.artifacts.filter(
+    (item) => !["html", "png", "svg"].includes(item.kind),
+  );
+  const chartArtifact =
+    htmlArtifacts.find((item) => item.id === selectedChart) ?? htmlArtifacts[0];
 
   return (
     <Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -181,10 +231,84 @@ export default function RunDetailPage() {
         </Card>
       ) : null}
 
-      <Card size="small" title={t("run.artifacts")}>
-        {run.artifacts.length ? (
+      {htmlArtifacts.length || previewImages.length ? (
+        <Card size="small" title={t("run.figures")}>
+          {htmlArtifacts.length ? (
+            <Space direction="vertical" size={10} style={{ width: "100%" }}>
+              <Space wrap>
+                <Select
+                  value={chartArtifact?.id}
+                  onChange={(value) => setSelectedChart(value)}
+                  options={htmlArtifacts.map((item) => ({
+                    value: item.id,
+                    label: item.logical_name,
+                  }))}
+                  style={{ minWidth: 280, maxWidth: "100%" }}
+                />
+                {chartArtifact ? (
+                  <>
+                    <Button
+                      href={api.artifactUrl(chartArtifact.id, "content")}
+                      target="_blank"
+                    >
+                      {t("artifact.openTab")}
+                    </Button>
+                    <Button href={api.artifactUrl(chartArtifact.id, "download")}>
+                      {t("artifact.download")}
+                    </Button>
+                  </>
+                ) : null}
+              </Space>
+              {chartArtifact ? (
+                <HtmlArtifactFrame
+                  artifactId={chartArtifact.id}
+                  height={720}
+                  title={chartArtifact.logical_name}
+                />
+              ) : null}
+            </Space>
+          ) : null}
+          {previewImages.length ? (
+            <Image.PreviewGroup>
+              <div className="figure-grid" style={{ marginTop: htmlArtifacts.length ? 14 : 0 }}>
+                {previewImages.map((artifact) => (
+                  <div className="figure-tile" key={artifact.id}>
+                    <Image
+                      src={api.artifactUrl(artifact.id, "content")}
+                      alt={artifact.logical_name}
+                      height={120}
+                      style={{
+                        objectFit: "contain",
+                        background: "#fff",
+                        border: "1px solid #e3ebf5",
+                        borderRadius: 6,
+                      }}
+                    />
+                    <Text
+                      ellipsis={{ tooltip: artifact.logical_name }}
+                      style={{ fontSize: 12 }}
+                    >
+                      {artifact.logical_name}
+                    </Text>
+                    <Button
+                      type="link"
+                      size="small"
+                      href={api.artifactUrl(artifact.id, "download")}
+                    >
+                      {t("artifact.download")}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </Image.PreviewGroup>
+          ) : null}
+        </Card>
+      ) : null}
+
+      {downloadArtifacts.length ? (
+        <Card size="small" title={t("run.downloads")}>
           <List
-            dataSource={run.artifacts}
+            dataSource={downloadArtifacts}
             renderItem={(artifact) => (
               <List.Item
                 actions={[
@@ -208,24 +332,15 @@ export default function RunDetailPage() {
                   }
                   description={`${artifact.kind} · ${artifact.size_bytes} B`}
                 />
-                {artifact.kind === "html" ? (
-                  <div style={{ width: "100%", marginTop: 12 }}>
-                    <HtmlArtifactFrame artifactId={artifact.id} />
-                  </div>
-                ) : artifact.kind === "png" || artifact.kind === "svg" ? (
-                  <img
-                    src={api.artifactUrl(artifact.id, "content")}
-                    alt={artifact.logical_name}
-                    style={{ maxWidth: "100%", marginTop: 12 }}
-                  />
-                ) : null}
               </List.Item>
             )}
           />
-        ) : (
+        </Card>
+      ) : !htmlArtifacts.length && !previewImages.length ? (
+        <Card size="small" title={t("run.artifacts")}>
           <Text type="secondary">{t("run.noArtifacts")}</Text>
-        )}
-      </Card>
+        </Card>
+      ) : null}
 
       <Card size="small" title={t("run.logs")}>
         <div className="log-list">

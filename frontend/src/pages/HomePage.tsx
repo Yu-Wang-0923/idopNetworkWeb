@@ -109,9 +109,6 @@ export default function HomePage() {
                   </Button>,
                 ]}
               >
-                <Tag className="module-phase">
-                  {t("home.comingSoon", { phase: module.phase })}
-                </Tag>
                 <Paragraph type="secondary" style={{ marginBottom: 0 }}>
                   {t(`home.module.${module.key}.desc`)}
                 </Paragraph>

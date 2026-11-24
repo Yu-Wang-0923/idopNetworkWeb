@@ -56,7 +56,8 @@ Open http://localhost:5173.
 ## Status
 
 - Phase 0: platform skeleton, anonymous workspace, job queue, demo task, frontend shell.
-- Later phases: Curve Fitting, FunClu, NetRecon, NetAnal, and platform hardening.
+- Phase 1: Curve Fitting — quasi-dynamic power fitting and dynamic SWT denoising, with the export ZIP, publication-grade HTML figure, per-lead ECG figures, and table downloads.
+- Later phases: FunClu, NetRecon, NetAnal, and platform hardening.
 
 ## License
 

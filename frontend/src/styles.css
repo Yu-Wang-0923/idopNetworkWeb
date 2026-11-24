@@ -311,9 +311,25 @@ a {
   font-family: Georgia, "Songti SC", serif;
 }
 
-.module-phase {
-  align-self: flex-start;
-  margin-bottom: 10px;
+.figure-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.figure-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 200px;
+}
+
+.figure-tile .ant-image {
+  width: 200px;
+}
+
+.figure-tile .ant-image-img {
+  border-radius: 6px;
 }
 
 .references-card .ant-card-body {

@@ -8,5 +8,15 @@
   "run.message.queued": {"zh": "排队中", "en": "Queued"},
   "run.message.cancelled": {"zh": "已取消", "en": "Cancelled"},
   "run.message.succeeded": {"zh": "计算完成", "en": "Completed"},
-  "run.message.failed": {"zh": "计算失败", "en": "Failed"}
+  "run.message.failed": {"zh": "计算失败", "en": "Failed"},
+  "curve_fitting.stage.validate": {"zh": "校验输入", "en": "Validating inputs"},
+  "curve_fitting.stage.fit": {"zh": "曲线拟合", "en": "Fitting curves"},
+  "curve_fitting.stage.export": {"zh": "导出结果", "en": "Exporting results"},
+  "curve_fitting.stage.charts": {"zh": "生成图表", "en": "Rendering figures"},
+  "curve_fitting.message.validating": {"zh": "校验 {{files}} 个 CSV 文件", "en": "Validating {{files}} CSV files"},
+  "curve_fitting.message.fitting": {"zh": "拟合 {{index}}/{{total}}：{{name}}", "en": "Fitting {{index}}/{{total}}: {{name}}"},
+  "curve_fitting.message.exporting": {"zh": "生成导出 ZIP", "en": "Building the export ZIP"},
+  "curve_fitting.message.charting": {"zh": "绘图：{{name}}", "en": "Rendering figures: {{name}}"},
+  "curve_fitting.message.file_failed": {"zh": "文件失败：{{name}}", "en": "File failed: {{name}}"},
+  "curve_fitting.message.done": {"zh": "曲线拟合完成，共 {{files}} 个文件", "en": "Curve fitting finished for {{files}} files"}
 }
