@@ -14,7 +14,7 @@ from app.jobs.registry import StageSpec, TaskSpec, register
 from app.pure.charts import funclu_html
 from app.pure.funclu import (
     build_funclu_k_export_zip,
-    common_feature_count,
+    finite_condition_frames,
     load_curve_fitting_zip,
     save_bic_comparison,
     scan_bic,
@@ -26,7 +26,9 @@ class FunCluKParams(BaseModel):
     max_iter: int = Field(default=1000, ge=10, le=2000)
     tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
     random_state: int = Field(default=42, ge=0, le=9999)
-    covariance_model: Literal["S1", "S2", "S3", "S4"] = "S4"
+    covariance_model: Literal["S1", "S2", "S3", "S4"] = "S1"
+    init_params: Literal["log_c_beta", "kmeans", "random"] = "log_c_beta"
+    use_minibatch_kmeans: bool = False
 
 
 class FunCluBicParams(BaseModel):
@@ -34,8 +36,10 @@ class FunCluBicParams(BaseModel):
     k_max: int = Field(default=20, ge=1, le=10000)
     step: int = Field(default=1, ge=1, le=100)
     covariance_models: list[Literal["S1", "S2", "S3", "S4"]] = Field(
-        default_factory=lambda: ["S1", "S2", "S3", "S4"]
+        default_factory=lambda: ["S1"]
     )
+    init_params: Literal["log_c_beta", "kmeans", "random"] = "log_c_beta"
+    use_minibatch_kmeans: bool = False
     n_init: int = Field(default=5, ge=1, le=10)
     max_iter: int = Field(default=1000, ge=10, le=2000)
     tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
@@ -70,10 +74,12 @@ def _curve_zip_input(ctx: TaskContext) -> Path:
 def _prepare(ctx: TaskContext, path: Path):
     curve_sample, quasi_dynamic = load_curve_fitting_zip(path.read_bytes())
     conditions = list(curve_sample)
-    frames = [curve_sample[name] for name in conditions]
-    features = common_feature_count(frames)
+    frames, valid_columns = finite_condition_frames(
+        [curve_sample[name] for name in conditions]
+    )
+    features = len(valid_columns)
     if features < 2:
-        raise ValueError("FunClu needs at least 2 shared features across conditions")
+        raise ValueError("FunClu needs at least 2 shared finite features")
     ctx.log(
         "funclu.message.loaded",
         conditions=len(conditions),
@@ -94,8 +100,8 @@ def _finite(value) -> float | None:
 
 
 def _parameter_tables(model, conditions: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
-    mu = model.params_mu.detach().cpu().numpy()
-    cov = model.params_cov.detach().cpu().numpy()
+    mu = np.asarray(model.params_mu, dtype=float)
+    cov = np.asarray(model.params_cov, dtype=float)
     mu_rows = [
         {
             "cluster": f"M{cluster + 1}",
@@ -160,8 +166,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
             f"n_components={params.n_components} exceeds the {features} shared features"
         )
 
-    from app.pure.funclu_engine import StructuredFunClu
-    from idopnetwork.curve_fitting import get_power_function_params
+    from app.pure.fast_funclu_power import PowerFunClu
 
     ctx.check_cancelled()
     ctx.progress(
@@ -170,22 +175,19 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         "funclu.message.fitting",
         k=params.n_components,
     )
-    model = StructuredFunClu(
+    model = PowerFunClu(
         n_components=params.n_components,
         max_iter=params.max_iter,
         tol=params.tol,
         random_state=params.random_state,
         covariance_model=params.covariance_model,
+        init_params=params.init_params,
+        use_minibatch_kmeans=params.use_minibatch_kmeans,
     )
-    model.fit(
-        frames,
-        parameter_data=[
-            get_power_function_params(quasi_dynamic[name]) for name in conditions
-        ],
-    )
+    model.fit(frames)
     ctx.check_cancelled()
 
-    labels = model.labels.detach().cpu().numpy().astype(int)
+    labels = np.asarray(model.labels, dtype=int)
     common_cols = list(model.common_cols)
     ctx.progress("funclu.stage.export", 0.80, "funclu.message.exporting")
     export = build_funclu_k_export_zip(
@@ -252,7 +254,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         mime="text/html",
     )
 
-    weights = model.weights.detach().cpu().numpy()
+    weights = np.asarray(model.weights, dtype=float)
     summary = {
         "task": "funclu.k",
         "conditions": conditions,
@@ -261,6 +263,10 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         "n_components": int(model.n_components),
         "covariance_model": params.covariance_model,
         "covariance_spec": model.covariance_spec(),
+        "init_params": params.init_params,
+        "init_params_used": model.init_params_used,
+        "init_fallback_reason": model.init_fallback_reason,
+        "use_minibatch_kmeans": bool(params.use_minibatch_kmeans),
         "converged": bool(model.converged),
         "n_iter_run": int(model.n_iter_run),
         "max_iter": int(params.max_iter),
@@ -312,12 +318,6 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
             f"k_max={k_max} is below k_min={k_min} for {features} shared features"
         )
 
-    from idopnetwork.curve_fitting import get_power_function_params
-
-    parameters = [
-        get_power_function_params(quasi_dynamic[name]) for name in conditions
-    ]
-
     def on_progress(k: int, index: int, total: int) -> None:
         ctx.progress(
             "funclu.stage.bic",
@@ -331,11 +331,12 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
     ctx.check_cancelled()
     bic_df = scan_bic(
         frames,
-        parameters,
         k_min=k_min,
         k_max=k_max,
         step=params.step,
         covariance_models=tuple(params.covariance_models),
+        init_params=params.init_params,
+        use_minibatch_kmeans=params.use_minibatch_kmeans,
         n_init=params.n_init,
         max_iter=params.max_iter,
         tol=params.tol,
@@ -390,6 +391,7 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "min_cluster_size": int(selected["min_cluster_size"]),
         "n_parameters": int(selected["n_parameters"]),
         "n_covariance_parameters": int(selected["n_covariance_parameters"]),
+        "init_params_used": str(selected["init_params_used"]),
     }
     summary = {
         "task": "funclu.bic",
@@ -401,6 +403,8 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "step": params.step,
         "n_init": params.n_init,
         "covariance_models": list(params.covariance_models),
+        "init_params": params.init_params,
+        "use_minibatch_kmeans": bool(params.use_minibatch_kmeans),
         "k_values": sorted(int(k) for k in bic_df["K"].unique()),
         "recommended_k": best_k,
         "selected_model": selected_model,

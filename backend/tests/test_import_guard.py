@@ -12,8 +12,8 @@ def test_backend_does_not_import_streamlit():
     import app.pure.charts.ecg_fitting_html  # noqa: F401
     import app.pure.charts.funclu_html  # noqa: F401
     import app.pure.curve_fitting  # noqa: F401
+    import app.pure.fast_funclu_power  # noqa: F401
     import app.pure.funclu  # noqa: F401
-    import app.pure.funclu_engine  # noqa: F401
     import app.tasks.curve_fitting  # noqa: F401
     import app.tasks.demo  # noqa: F401
     import app.tasks.funclu  # noqa: F401

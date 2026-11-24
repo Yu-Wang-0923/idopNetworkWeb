@@ -12,6 +12,7 @@ import {
   Segmented,
   Select,
   Space,
+  Switch,
   Tabs,
   Tag,
   Typography,
@@ -42,6 +43,8 @@ interface KValues {
   tol: number;
   random_state: number;
   covariance_model: string;
+  init_params: string;
+  use_minibatch_kmeans: boolean;
 }
 
 interface BicValues {
@@ -49,6 +52,8 @@ interface BicValues {
   k_max: number;
   step: number;
   covariance_models: string[];
+  init_params: string;
+  use_minibatch_kmeans: boolean;
   n_init: number;
   max_iter: number;
   tol: number;
@@ -61,6 +66,12 @@ const covarianceOptions = (t: (key: string) => string) => [
   { value: "S2", label: t("funclu.covariance.S2") },
   { value: "S3", label: t("funclu.covariance.S3") },
   { value: "S4", label: t("funclu.covariance.S4") },
+];
+
+const initOptions = (t: (key: string) => string) => [
+  { value: "log_c_beta", label: t("funclu.init.log_c_beta") },
+  { value: "kmeans", label: t("funclu.init.kmeans") },
+  { value: "random", label: t("funclu.init.random") },
 ];
 
 function inputPayload(input: SelectedInput) {
@@ -118,7 +129,9 @@ function KForm({ input }: { input: SelectedInput | null }) {
         max_iter: 1000,
         tol: 0.0001,
         random_state: 42,
-        covariance_model: "S4",
+        covariance_model: "S1",
+        init_params: "log_c_beta",
+        use_minibatch_kmeans: false,
       }}
       onFinish={submit}
     >
@@ -139,6 +152,20 @@ function KForm({ input }: { input: SelectedInput | null }) {
         <Col span={12}>
           <Form.Item label={t("funclu.covarianceModel")} name="covariance_model">
             <Select options={covarianceOptions(t)} />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item label={t("funclu.initParams")} name="init_params">
+            <Select options={initOptions(t)} />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            label={t("funclu.useMiniBatch")}
+            name="use_minibatch_kmeans"
+            valuePropName="checked"
+          >
+            <Switch />
           </Form.Item>
         </Col>
         <Col span={12}>
@@ -225,7 +252,9 @@ function BicForm({ input }: { input: SelectedInput | null }) {
         k_min: 2,
         k_max: 20,
         step: 1,
-        covariance_models: ["S1", "S2", "S3", "S4"],
+        covariance_models: ["S1"],
+        init_params: "log_c_beta",
+        use_minibatch_kmeans: false,
         n_init: 5,
         max_iter: 1000,
         tol: 0.0001,
@@ -260,6 +289,23 @@ function BicForm({ input }: { input: SelectedInput | null }) {
             rules={[{ required: true }]}
           >
             <Select mode="multiple" options={covarianceOptions(t)} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={12}>
+        <Col span={12}>
+          <Form.Item label={t("funclu.initParams")} name="init_params">
+            <Select options={initOptions(t)} />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item
+            label={t("funclu.useMiniBatch")}
+            name="use_minibatch_kmeans"
+            valuePropName="checked"
+          >
+            <Switch />
           </Form.Item>
         </Col>
       </Row>

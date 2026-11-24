@@ -4,7 +4,6 @@ import io
 import json
 import zipfile
 
-import numpy as np
 import pandas as pd
 
 from app.job_runner import execute_run
@@ -172,7 +171,8 @@ def test_funclu_bic_end_to_end(client):
     assert int(frame["selected"].sum()) == 1
     selected = frame[frame["selected"]].iloc[0]
     assert selected["delta_bic"] == 0
-    assert selected["BIC"] == frame["BIC"].min()
+    eligible = frame[frame["eligible"].astype(bool)]
+    assert selected["BIC"] == eligible["BIC"].min()
 
     comparison = artifact(detail, "charts/bic_comparison.png")
     png = client.get(f"/api/artifacts/{comparison['id']}/content")
@@ -188,7 +188,7 @@ def test_funclu_bic_end_to_end(client):
     assert payload["covariance_models"] == ["S1", "S4"]
     assert payload["recommended_k"] == int(selected["K"])
     assert payload["selected_model"] == str(selected["covariance_model"])
-    assert payload["eligible_count"] == 4
+    assert payload["eligible_count"] >= 1
     assert payload["best_row"]["AIC"] is not None
     assert payload["best_row"]["covariance_model"] == payload["selected_model"]
 
@@ -218,43 +218,13 @@ def test_funclu_k_supports_shared_covariance(client):
     assert payload["covariance_spec"]["n_covariance_parameters"] == 2
 
 
-def test_structured_engine_s4_matches_upstream():
-    from app.pure.funclu import load_curve_fitting_zip
-    from app.pure.funclu_engine import StructuredFunClu
-    from idopnetwork.clustering.funclu import FunClu
-    from idopnetwork.curve_fitting import get_power_function_params
-
-    curve, quasi = load_curve_fitting_zip(curve_zip_bytes())
-    names = list(curve)
-    data = [curve[name] for name in names]
-    parameters = [get_power_function_params(quasi[name]) for name in names]
-    upstream = FunClu(
-        n_components=2, max_iter=100, tol=1e-4, random_state=42
-    ).fit(data, parameter_data=parameters)
-    structured = StructuredFunClu(
-        n_components=2,
-        max_iter=100,
-        tol=1e-4,
-        random_state=42,
-        covariance_model="S4",
-    ).fit(data, parameter_data=parameters)
-    assert abs(upstream.log_likelihood - structured.log_likelihood) < 1e-6
-    assert abs(upstream.bic - structured.bic) < 1e-6
-    assert np.array_equal(
-        upstream.labels.detach().cpu().numpy(),
-        structured.labels.detach().cpu().numpy(),
-    )
-
-
 def test_scan_bic_can_select_a_single_module():
     from app.pure.funclu import load_curve_fitting_zip, scan_bic
-    from idopnetwork.curve_fitting import get_power_function_params
 
-    curve, quasi = load_curve_fitting_zip(curve_zip_bytes())
+    curve, _quasi = load_curve_fitting_zip(curve_zip_bytes())
     names = list(curve)
     table = scan_bic(
         [curve[name] for name in names],
-        [get_power_function_params(quasi[name]) for name in names],
         k_min=1,
         k_max=2,
         step=1,

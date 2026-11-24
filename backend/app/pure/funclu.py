@@ -66,6 +66,27 @@ def common_feature_count(frames: list[pd.DataFrame]) -> int:
     return len(common)
 
 
+def finite_condition_frames(
+    frames: list[pd.DataFrame],
+) -> tuple[list[pd.DataFrame], list[str]]:
+    """Keep shared features whose values are finite in every condition."""
+    if not frames:
+        raise ValueError("FunClu requires at least one condition")
+    common = [str(column) for column in frames[0].columns]
+    for frame in frames[1:]:
+        common = [column for column in common if column in frame.columns]
+    valid = []
+    for column in common:
+        if all(
+            np.isfinite(frame[column].to_numpy(dtype=float)).all()
+            for frame in frames
+        ):
+            valid.append(column)
+    if not valid:
+        raise ValueError("No shared finite feature is available for FunClu")
+    return [frame.loc[:, valid] for frame in frames], valid
+
+
 def build_funclu_k_export_zip(
     *,
     model: Any,
@@ -77,7 +98,7 @@ def build_funclu_k_export_zip(
     if model.labels is None or model.common_cols is None:
         raise ValueError("FunClu-K result is incomplete: missing labels/common columns.")
 
-    labels_np = model.labels.detach().cpu().numpy().astype(int)
+    labels_np = np.asarray(model.labels, dtype=int)
     common_cols = list(model.common_cols)
     if len(labels_np) != len(common_cols):
         raise ValueError("FunClu-K labels do not match common curve_sample columns.")
@@ -182,12 +203,14 @@ def _silhouette_index(
 
 def scan_bic(
     data: list[pd.DataFrame],
-    parameter_data: list[pd.DataFrame],
+    parameter_data: list[pd.DataFrame] | None = None,
     *,
     k_min: int = 2,
     k_max: int = 10,
     step: int = 1,
     covariance_models: tuple[str, ...] = ("S1", "S2", "S3", "S4"),
+    init_params: str = "log_c_beta",
+    use_minibatch_kmeans: bool = False,
     n_init: int = 5,
     max_iter: int = 1000,
     tol: float = 1e-4,
@@ -205,7 +228,8 @@ def scan_bic(
     ``delta_bic`` is measured against it.  S1-S3 share the SAD(1) covariance
     parameters across conditions; S4 is condition-specific.
     """
-    from app.pure.funclu_engine import COVARIANCE_MODELS, StructuredFunClu
+    from app.pure.fast_funclu_power import COVARIANCE_MODELS as ENGINE_MODELS
+    from app.pure.fast_funclu_power import PowerFunClu
 
     if not data:
         raise ValueError("FunClu requires at least one condition")
@@ -214,12 +238,13 @@ def scan_bic(
     if min_cluster_size < 1:
         raise ValueError("min_cluster_size must be at least 1")
     models = tuple(str(name).upper() for name in covariance_models)
-    if not models or any(name not in COVARIANCE_MODELS for name in models):
+    if not models or any(name not in ENGINE_MODELS for name in models):
         raise ValueError(
             "covariance_models must be a non-empty subset of "
-            + ", ".join(COVARIANCE_MODELS)
+            + ", ".join(ENGINE_MODELS)
         )
-    n_features = min(int(frame.shape[1]) for frame in data)
+    frames, valid_columns = finite_condition_frames(data)
+    n_features = len(valid_columns)
     effective_max = min(int(k_max), n_features)
     ks = list(range(int(k_min), effective_max + 1, int(step)))
     if not ks:
@@ -237,12 +262,14 @@ def scan_bic(
                 if check is not None:
                     check()
                 try:
-                    model = StructuredFunClu(
+                    model = PowerFunClu(
                         n_components=k,
                         max_iter=max_iter,
                         tol=tol,
                         random_state=int(random_state) + offset,
                         covariance_model=model_name,
+                        init_params=init_params,
+                        use_minibatch_kmeans=use_minibatch_kmeans,
                     )
                     model.fit(data, parameter_data=parameter_data)
                 except Exception as exc:  # noqa: BLE001 - a single start may fail
@@ -257,15 +284,17 @@ def scan_bic(
                         "covariance_model": model_name,
                         "BIC": float("nan"),
                         "AIC": float("nan"),
+                        "init_params": init_params,
+                        "use_minibatch_kmeans": bool(use_minibatch_kmeans),
                         "error": "; ".join(errors),
                     }
                 )
                 continue
-            labels = best.labels.detach().cpu().numpy().astype(int)
+            labels = np.asarray(best.labels, dtype=int)
             counts = np.bincount(labels, minlength=k)
             sizes = [int(count) for count in counts]
             n_parameters = int(best.n_params)
-            n_covariance = int(best.kernel_.covariance_parameter_count())
+            n_covariance = int(best.n_covariance_parameters)
             rows.append(
                 {
                     "K": k,
@@ -286,6 +315,9 @@ def scan_bic(
                     "converged": bool(best.converged),
                     "n_iter": int(best.n_iter_run),
                     "n_init": n_init,
+                    "init_params": init_params,
+                    "init_params_used": best.init_params_used,
+                    "use_minibatch_kmeans": bool(use_minibatch_kmeans),
                     "n_features": int(best.n_features),
                     "n_conditions": int(best.n_conditions),
                     "min_cluster_size": int(min(sizes)),
@@ -329,6 +361,9 @@ def scan_bic(
         "cluster_sizes",
         "n_iter",
         "n_init",
+        "init_params",
+        "init_params_used",
+        "use_minibatch_kmeans",
         "n_features",
         "n_conditions",
         "error",

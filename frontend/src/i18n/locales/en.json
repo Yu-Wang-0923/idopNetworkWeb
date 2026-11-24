@@ -174,7 +174,12 @@
   "funclu.k.tol": "Tolerance",
   "funclu.k.randomState": "Random seed",
   "funclu.k.submit": "Run FunClu-K",
-  "funclu.k.tip": "K must lie between 2 and the number of shared features; S4 keeps the previous model, while S1–S3 share covariance parameters across conditions. The FunClu-K ZIP feeds multi-layer network reconstruction.",
+  "funclu.k.tip": "The engine is Fast-Funclu with a power mean on the supplied scale and additive SAD(1) residuals. S1 covariance and log_c_beta initialization are the defaults; non-positive responses fall back to KMeans. The FunClu-K ZIP feeds multi-layer network reconstruction.",
+  "funclu.initParams": "Initialization",
+  "funclu.init.log_c_beta": "log(c)+β regression (default)",
+  "funclu.init.kmeans": "KMeans (curve profiles)",
+  "funclu.init.random": "Random",
+  "funclu.useMiniBatch": "Use MiniBatchKMeans",
   "funclu.covarianceModel": "Covariance structure",
   "funclu.covariance.S1": "S1 · shared φ and γ",
   "funclu.covariance.S2": "S2 · shared φ, per-condition γ",
@@ -190,5 +195,5 @@
   "funclu.bic.randomState": "Random seed",
   "funclu.bic.minClusterSize": "Minimum cluster size",
   "funclu.bic.submit": "Run BIC scan",
-  "funclu.bic.tip": "Following Fast-Funclu: scan the joint grid of K and the selected covariance structures (S1–S4); each candidate keeps the highest-likelihood run over n_init starts. The recommended model is the lowest BIC among candidates meeting the minimum module size, and the table reports AIC, ΔBIC, selected and the structure. A running scan can be cancelled at each K boundary."
+  "funclu.bic.tip": "The engine is Fast-Funclu with a power mean on the supplied scale and additive SAD(1) residuals. Scans the joint grid of K and the selected covariance structures (S1 by default; S1–S4 can be selected); each candidate keeps the highest-likelihood run over n_init starts. The recommended model is the lowest BIC among candidates meeting the minimum module size, and the table reports AIC, ΔBIC, selected and the structure. A running scan can be cancelled at each K boundary."
 }

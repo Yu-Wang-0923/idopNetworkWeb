@@ -17,6 +17,7 @@ dependencies = [
     "itsdangerous>=2.2",
     "pandas>=2.0",
     "idopnetwork @ git+https://github.com/Yu-Wang-0923/idopNetworkAPP.git@fc5dc2f5a903c7fdbdadeef903771f9852f05b8c#subdirectory=packages/idopnetwork",
+    "fast-funclu @ git+https://github.com/sccycy66-sudo/Fast-Funclu.git@583cebbeb8416678f06d979e03b7461701d1c74d",
 ]
 
 [project.optional-dependencies]

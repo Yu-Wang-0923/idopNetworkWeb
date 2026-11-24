@@ -60,6 +60,10 @@ Open http://localhost:5173.
 - Phase 2: FunClu — EM functional clustering with a FunClu-K export ZIP and cluster-profile HTML, plus a BIC scan over K × S1–S4 covariance structures (best of n_init starts, AIC/ΔBIC/selected table, comparison plot) that can be cancelled at K boundaries.
 - Later phases: NetRecon, NetAnal, and platform hardening.
 
+### FunClu engine
+
+FunClu runs on the **Fast-Funclu** estimator (`fast-funclu`, pinned at commit `583cebbeb8416678f06d979e03b7461701d1c74d`, provided and authorized by its author). The engine is adapted for this platform to use the Curve Fitting export values directly: the component mean is a power law `exp(alpha + beta * z)` on the supplied scale, with additive SAD(1) residuals on that scale. Initialization defaults to `log_c_beta` (falling back to KMeans for non-positive responses); KMeans/MiniBatchKMeans and random starts are selectable. Covariance structures S1–S4 share the SAD(1) `phi`/`gamma` parameters across conditions; the FunClu-K task defaults to S1, and BIC can compare any subset (default S1).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
