@@ -167,3 +167,227 @@ a {
     padding: 10px 16px;
   }
 }
+
+.app-brand {
+  align-items: center;
+  text-align: center;
+}
+
+.app-brand__logo {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  margin-bottom: 6px;
+}
+
+.home-hero {
+  border: 1px solid #dbe6f3;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(36, 93, 180, 0.13), transparent 42%),
+    linear-gradient(135deg, #fdfefe 0%, #eef5fc 100%);
+}
+
+.home-hero .ant-card-body {
+  padding: 28px;
+}
+
+.home-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 250px;
+  gap: 26px;
+  align-items: start;
+}
+
+.home-hero-head {
+  margin-bottom: 16px;
+}
+
+.home-title {
+  margin: 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.1;
+  color: #193454;
+}
+
+.home-title-cn {
+  margin-left: 10px;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 0.48em;
+  letter-spacing: 0.02em;
+  color: #2f5784;
+}
+
+.home-hero-body {
+  display: grid;
+  grid-template-columns: minmax(180px, 300px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+}
+
+.home-hero-figure {
+  margin: 0;
+}
+
+.home-hero-figure img {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+}
+
+.home-hero-copy {
+  min-width: 0;
+}
+
+.home-intro {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.8;
+  color: #3f5671;
+}
+
+.home-intro strong {
+  color: #193454;
+}
+
+.home-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.home-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 16px;
+  border: 1px solid #dbe6f3;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.home-profile__photo {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(25, 52, 84, 0.12);
+}
+
+.home-profile__name {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #193454;
+}
+
+.home-profile__role {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #4a5f7d;
+}
+
+.home-profile__link {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #245db4;
+  color: #fff;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.home-profile__link:hover {
+  background: #1d4f9c;
+  color: #fff;
+}
+
+.home-section-title {
+  margin-top: 4px;
+  font-family: Georgia, "Songti SC", serif;
+}
+
+.module-phase {
+  align-self: flex-start;
+  margin-bottom: 10px;
+}
+
+.references-card .ant-card-body {
+  padding-top: 6px;
+}
+
+.references-scroll {
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 8px;
+}
+
+.references-year h3 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 8px 0 0;
+  padding: 8px 4px;
+  border-bottom: 1px solid #e3ebf5;
+  background: #fff;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 16px;
+  color: #193454;
+}
+
+.reference-item {
+  padding: 10px 4px 11px;
+  border-bottom: 1px solid #eef3f9;
+}
+
+.reference-title {
+  font-weight: 600;
+  line-height: 1.55;
+  color: #193454;
+}
+
+.reference-meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #5b6b80;
+}
+
+.reference-meta a {
+  color: #245db4;
+}
+
+@media (max-width: 1000px) {
+  .home-hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .home-profile {
+    flex-direction: row;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .home-profile__photo {
+    width: 84px;
+    height: 84px;
+  }
+}
+
+@media (max-width: 720px) {
+  .home-hero .ant-card-body {
+    padding: 18px;
+  }
+
+  .home-hero-body {
+    grid-template-columns: 1fr;
+  }
+
+  .home-profile {
+    flex-wrap: wrap;
+  }
+}

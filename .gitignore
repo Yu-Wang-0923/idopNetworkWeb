@@ -14,7 +14,7 @@ dist/
 .vite/
 
 # Runtime data and secrets
-data/
+/data/
 *.key
 .env
 .env.*

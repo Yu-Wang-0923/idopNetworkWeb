@@ -1,0 +1,378 @@
+[
+  {
+    "year": 2026,
+    "title": "Graph statistics theory of individualized quantitative genetics under haplotype-resolved genome assembly.",
+    "authors": "Sun, L., Bian, Y., Yang, D., et al.",
+    "journal": "Proceedings of the National Academy of Sciences",
+    "doi": "DOI 10.1073/pnas.2600004123",
+    "url": "https://doi.org/10.1073/pnas.2600004123"
+  },
+  {
+    "year": 2026,
+    "title": "A statistical mechanics model to decode tissue crosstalk during graft formation.",
+    "authors": "Dong, A., Meng, Y., Yau, S. S.-T., et al.",
+    "journal": "Advanced Science",
+    "doi": "DOI 10.1002/advs.202523373",
+    "url": "https://doi.org/10.1002/advs.202523373"
+  },
+  {
+    "year": 2026,
+    "title": "An omnigenic interactome model to chart the genetic architecture of individual plants.",
+    "authors": "Fa, C., Wang, G., Pan, W., et al.",
+    "journal": "Horticulture Research",
+    "doi": "DOI 10.1093/hr/uhaf345",
+    "url": "https://doi.org/10.1093/hr/uhaf345"
+  },
+  {
+    "year": 2026,
+    "title": "Network stress: A wiring diagram of whole stress genes.",
+    "authors": "Wang, Y., & Wu, R.",
+    "journal": "Horticulture Research",
+    "doi": "DOI 10.1093/hr/uhaf302",
+    "url": "https://doi.org/10.1093/hr/uhaf302"
+  },
+  {
+    "year": 2026,
+    "title": "Statistical learning of stochastic complex systems via the yau-yau nonlinear filter.",
+    "authors": "Xu, S., Wang, Y., Wu, S., et al.",
+    "journal": "The Innovation",
+    "doi": "DOI 10.1016/j.xinn.2026.101267",
+    "url": "https://doi.org/10.1016/j.xinn.2026.101267"
+  },
+  {
+    "year": 2025,
+    "title": "IdopNetwork as a genomic predictor of drug response.",
+    "authors": "Che, J., Jin, Y., Gragnoli, C., et al.",
+    "journal": "Drug Discovery Today",
+    "doi": "DOI 10.1016/j.drudis.2024.104252",
+    "url": "https://doi.org/10.1016/j.drudis.2024.104252"
+  },
+  {
+    "year": 2025,
+    "title": "High-order interaction modeling of tumor-microenvironment crosstalk for tumor growth.",
+    "authors": "Che, J., Wang, Y., Feng, L., et al.",
+    "journal": "Physics of Life Reviews",
+    "doi": "DOI 10.1016/j.plrev.2025.05.007",
+    "url": "https://doi.org/10.1016/j.plrev.2025.05.007"
+  },
+  {
+    "year": 2025,
+    "title": "Network modeling and topology of aging.",
+    "authors": "Feng, L., Yang, D., Wu, S., et al.",
+    "journal": "Physics Reports",
+    "doi": "DOI 10.1016/j.physrep.2024.10.006",
+    "url": "https://doi.org/10.1016/j.physrep.2024.10.006"
+  },
+  {
+    "year": 2025,
+    "title": "idopNetwork analysis of salt-responsive transcriptomes reveals hub regulatory modules and genes in populus euphratica.",
+    "authors": "Wu, S., Pan, W., & Dong, A.",
+    "journal": "International Journal of Molecular Sciences",
+    "doi": "DOI 10.3390/ijms26094091",
+    "url": "https://doi.org/10.3390/ijms26094091"
+  },
+  {
+    "year": 2025,
+    "title": "Disentangling complex systems: IdopNetwork meets GLMY homology theory.",
+    "authors": "Wu, S., & Zhang, M.",
+    "journal": "Data Analytics and Topology",
+    "doi": "",
+    "url": ""
+  },
+  {
+    "year": 2024,
+    "title": "Hypernetwork modeling and topology of high-order interactions for complex systems.",
+    "authors": "Feng, L., Gong, H., Zhang, S., et al.",
+    "journal": "Proceedings of the National Academy of Sciences",
+    "doi": "DOI 10.1073/pnas.2412220121",
+    "url": "https://doi.org/10.1073/pnas.2412220121"
+  },
+  {
+    "year": 2024,
+    "title": "Topological change of soil microbiota networks for forest resilience under global warming.",
+    "authors": "Gong, H., Wang, H., Wang, Y., et al.",
+    "journal": "Physics of Life Reviews",
+    "doi": "DOI 10.1016/j.plrev.2024.08.001",
+    "url": "https://doi.org/10.1016/j.plrev.2024.08.001"
+  },
+  {
+    "year": 2024,
+    "title": "Genome-wide network analysis of above- and below-ground Co-growth in populus euphratica.",
+    "authors": "Lu, K., Gong, H., Yang, D., et al.",
+    "journal": "Plant Phenomics",
+    "doi": "DOI 10.34133/plantphenomics.0131",
+    "url": "https://doi.org/10.34133/plantphenomics.0131"
+  },
+  {
+    "year": 2024,
+    "title": "Mapping the influence of light intensity on the transgenerational genetic architecture of arabidopsis thaliana.",
+    "authors": "Mei, J., Che, J., Shi, Y., et al.",
+    "journal": "Current Issues in Molecular Biology",
+    "doi": "DOI 10.3390/cimb46080482",
+    "url": "https://doi.org/10.3390/cimb46080482"
+  },
+  {
+    "year": 2023,
+    "title": "idopNetwork: A network tool to dissect spatial community ecology.",
+    "authors": "Dong, A., Wu, S., Che, J., et al.",
+    "journal": "Methods in Ecology and Evolution",
+    "doi": "DOI 10.1111/2041-210X.14172",
+    "url": "https://doi.org/10.1111/2041-210X.14172"
+  },
+  {
+    "year": 2023,
+    "title": "A personalized pharmaco-epistatic network model of precision medicine.",
+    "authors": "Feng, L., Yang, W., Ding, M., et al.",
+    "journal": "Drug Discovery Today",
+    "doi": "DOI 10.1016/j.drudis.2023.103608",
+    "url": "https://doi.org/10.1016/j.drudis.2023.103608"
+  },
+  {
+    "year": 2023,
+    "title": "Competition-cooperation mechanism between escherichia coli and staphylococcus aureus based on systems mapping.",
+    "authors": "Li, C., Yin, L., He, X., et al.",
+    "journal": "Frontiers in Microbiology",
+    "doi": "DOI 10.3389/fmicb.2023.1192574",
+    "url": "https://doi.org/10.3389/fmicb.2023.1192574"
+  },
+  {
+    "year": 2023,
+    "title": "The genetic architecture of trait covariation in populus euphratica, a desert tree.",
+    "authors": "Lu, K., Wang, X., Gong, H., et al.",
+    "journal": "Frontiers in Plant Science",
+    "doi": "DOI 10.3389/fpls.2023.1149879",
+    "url": "https://doi.org/10.3389/fpls.2023.1149879"
+  },
+  {
+    "year": 2023,
+    "title": "The genomic physics of tumor–microenvironment crosstalk.",
+    "authors": "Sang, M., Feng, L., Dong, A., et al.",
+    "journal": "Physics Reports",
+    "doi": "DOI 10.1016/j.physrep.2023.07.006",
+    "url": "https://doi.org/10.1016/j.physrep.2023.07.006"
+  },
+  {
+    "year": 2023,
+    "title": "A pleiotropic–epistatic entangelement model of drug response.",
+    "authors": "Wang, Y., Sang, M., Feng, L., et al.",
+    "journal": "Drug Discovery Today",
+    "doi": "DOI 10.1016/j.drudis.2023.103790",
+    "url": "https://doi.org/10.1016/j.drudis.2023.103790"
+  },
+  {
+    "year": 2023,
+    "title": "The metabolomic physics of complex diseases.",
+    "authors": "Wu, S., Liu, X., Dong, A., et al.",
+    "journal": "Proceedings of the National Academy of Sciences",
+    "doi": "DOI 10.1073/pnas.2308496120",
+    "url": "https://doi.org/10.1073/pnas.2308496120"
+  },
+  {
+    "year": 2022,
+    "title": "Modeling spatial interaction networks of the gut microbiota.",
+    "authors": "Cao, X., Dong, A., Kang, G., et al.",
+    "journal": "Gut Microbes",
+    "doi": "DOI 10.1080/19490976.2022.2106103",
+    "url": "https://doi.org/10.1080/19490976.2022.2106103"
+  },
+  {
+    "year": 2022,
+    "title": "An eco-evo-devo genetic network model of stress response.",
+    "authors": "Feng, L., Dong, T., Jiang, P., et al.",
+    "journal": "Horticulture Research",
+    "doi": "DOI 10.1093/hr/uhac135",
+    "url": "https://doi.org/10.1093/hr/uhac135"
+  },
+  {
+    "year": 2022,
+    "title": "Disentangling leaf-microbiome interactions in arabidopsis thaliana by network mapping.",
+    "authors": "Li, K., Cheng, K., Wang, H., et al.",
+    "journal": "Frontiers in Plant Science",
+    "doi": "DOI 10.3389/fpls.2022.996121",
+    "url": "https://doi.org/10.3389/fpls.2022.996121"
+  },
+  {
+    "year": 2022,
+    "title": "A graph model of combination therapies.",
+    "authors": "Sang, M., Dong, A., Wu, S., et al.",
+    "journal": "Drug Discovery Today",
+    "doi": "DOI 10.1016/j.drudis.2022.02.001",
+    "url": "https://doi.org/10.1016/j.drudis.2022.02.001"
+  },
+  {
+    "year": 2022,
+    "title": "A single-cell omics network model of cell crosstalk during the formation of primordial follicles.",
+    "authors": "Wang, Q., Dong, A., Jiang, L., et al.",
+    "journal": "Cells",
+    "doi": "DOI 10.3390/cells11030332",
+    "url": "https://doi.org/10.3390/cells11030332"
+  },
+  {
+    "year": 2022,
+    "title": "Vaginal microbiota networks as a mechanistic predictor of aerobic vaginitis.",
+    "authors": "Wang, Q., Dong, A., Zhao, J., et al.",
+    "journal": "Frontiers in Microbiology",
+    "doi": "DOI 10.3389/fmicb.2022.998813",
+    "url": "https://doi.org/10.3389/fmicb.2022.998813"
+  },
+  {
+    "year": 2021,
+    "title": "FunGraph: A statistical protocol to reconstruct omnigenic multilayer interactome networks for complex traits.",
+    "authors": "Dong, A., Feng, L., Yang, D., et al.",
+    "journal": "STAR Protocols",
+    "doi": "DOI 10.1016/j.xpro.2021.100985",
+    "url": "https://doi.org/10.1016/j.xpro.2021.100985"
+  },
+  {
+    "year": 2021,
+    "title": "The genomic physics of COVID-19 pathogenesis and spread.",
+    "authors": "Dong, A., Zhao, J., Griffin, C., & Wu, R.",
+    "journal": "Cells",
+    "doi": "DOI 10.3390/cells11010080",
+    "url": "https://doi.org/10.3390/cells11010080"
+  },
+  {
+    "year": 2021,
+    "title": "Genetic dissection of growth trajectories in forest trees: From FunMap to FunGraph.",
+    "authors": "Feng, L., Jiang, P., Li, C., et al.",
+    "journal": "Forestry Research",
+    "doi": "DOI 10.48130/FR-2021-0019",
+    "url": "https://doi.org/10.48130/FR-2021-0019"
+  },
+  {
+    "year": 2021,
+    "title": "Genetic architecture of multiphasic growth covariation as revealed by a nonlinear mixed mapping framework.",
+    "authors": "Gong, H., Zhang, X.-Y., Zhu, S., et al.",
+    "journal": "Frontiers in Plant Science",
+    "doi": "DOI 10.3389/fpls.2021.711219",
+    "url": "https://doi.org/10.3389/fpls.2021.711219"
+  },
+  {
+    "year": 2021,
+    "title": "A multilayer interactome network constructed in a forest poplar population mediates the pleiotropic control of complex traits.",
+    "authors": "Gong, H., Zhu, S., Zhu, X., et al.",
+    "journal": "Frontiers in Genetics",
+    "doi": "DOI 10.3389/fgene.2021.769688",
+    "url": "https://doi.org/10.3389/fgene.2021.769688"
+  },
+  {
+    "year": 2021,
+    "title": "Network mapping of root–microbe interactions in arabidopsis thaliana.",
+    "authors": "He, X., Zhang, Q., Li, B., et al.",
+    "journal": "Npj Biofilms and Microbiomes",
+    "doi": "DOI 10.1038/s41522-021-00241-4",
+    "url": "https://doi.org/10.1038/s41522-021-00241-4"
+  },
+  {
+    "year": 2021,
+    "title": "A behavioral model for mapping the genetic architecture of gut-microbiota networks.",
+    "authors": "Jiang, L., Liu, X., He, X., et al.",
+    "journal": "Gut Microbes",
+    "doi": "DOI 10.1080/19490976.2020.1820847",
+    "url": "https://doi.org/10.1080/19490976.2020.1820847"
+  },
+  {
+    "year": 2021,
+    "title": "Adaptive sparse group LASSO in quantile regression.",
+    "authors": "Mendez-Civieta, A., Aguilera-Morillo, M. C., & Lillo, R. E.",
+    "journal": "Advances in Data Analysis and Classification",
+    "doi": "DOI 10.1007/s11634-020-00413-8",
+    "url": "https://doi.org/10.1007/s11634-020-00413-8"
+  },
+  {
+    "year": 2021,
+    "title": "Statistical mechanics of clock gene networks underlying circadian rhythms.",
+    "authors": "Sun, L., Dong, A., Griffin, C., & Wu, R.",
+    "journal": "Applied Physics Reviews",
+    "doi": "DOI 10.1063/5.0029993",
+    "url": "https://doi.org/10.1063/5.0029993"
+  },
+  {
+    "year": 2021,
+    "title": "Modeling genome-wide by environment interactions through omnigenic interactome networks.",
+    "authors": "Wang, H., Ye, M., Fu, Y., et al.",
+    "journal": "Cell Reports",
+    "doi": "DOI 10.1016/j.celrep.2021.109114",
+    "url": "https://doi.org/10.1016/j.celrep.2021.109114"
+  },
+  {
+    "year": 2021,
+    "title": "Recovering dynamic networks in big static datasets.",
+    "authors": "Wu, R., & Jiang, L.",
+    "journal": "Physics Reports",
+    "doi": "DOI 10.1016/j.physrep.2021.01.003",
+    "url": "https://doi.org/10.1016/j.physrep.2021.01.003"
+  },
+  {
+    "year": 2021,
+    "title": "Inferring multilayer interactome networks shaping phenotypic plasticity and evolution.",
+    "authors": "Yang, D., Jin, Y., He, X., et al.",
+    "journal": "Nature Communications",
+    "doi": "DOI 10.1038/s41467-021-25086-5",
+    "url": "https://doi.org/10.1038/s41467-021-25086-5"
+  },
+  {
+    "year": 2020,
+    "title": "SEGN: Inferring real-time gene networks mediating phenotypic plasticity.",
+    "authors": "Jiang, L., Griffin, C. H., & Wu, R.",
+    "journal": "Computational and Structural Biotechnology Journal",
+    "doi": "DOI 10.1016/j.csbj.2020.08.029",
+    "url": "https://doi.org/10.1016/j.csbj.2020.08.029"
+  },
+  {
+    "year": 2020,
+    "title": "Computational identification of gene networks as a biomarker of neuroblastoma risk.",
+    "authors": "Sun, L., Jiang, L., Grant, C. N., et al.",
+    "journal": "Cancers",
+    "doi": "DOI 10.3390/cancers12082086",
+    "url": "https://doi.org/10.3390/cancers12082086"
+  },
+  {
+    "year": 2020,
+    "title": "An omnidirectional visualization model of personalized gene regulatory networks.",
+    "authors": "Chen, C., Jiang, L., Fu, G., et al.",
+    "journal": "Npj Systems Biology and Applications",
+    "doi": "DOI 10.1038/s41540-019-0116-1",
+    "url": "https://doi.org/10.1038/s41540-019-0116-1"
+  },
+  {
+    "year": 2019,
+    "title": "A drive to driven model of mapping intraspecific interaction networks.",
+    "authors": "Jiang, L., Xu, J., Sang, M., et al.",
+    "journal": "iScience",
+    "doi": "DOI 10.1016/j.isci.2019.11.002",
+    "url": "https://doi.org/10.1016/j.isci.2019.11.002"
+  },
+  {
+    "year": 2019,
+    "title": "Interrogation of internal workings in microbial community assembly: Play a game through a behavioral network?",
+    "authors": "Wang, Q., Liu, X., Jiang, L., et al.",
+    "journal": "mSystems",
+    "doi": "DOI 10.1128/mSystems.00550-19",
+    "url": "https://doi.org/10.1128/mSystems.00550-19"
+  },
+  {
+    "year": 2019,
+    "title": "Complex network approaches to nonlinear time series analysis.",
+    "authors": "Zou, Y., Donner, R. V., Marwan, N., et al.",
+    "journal": "Physics Reports",
+    "doi": "DOI 10.1016/j.physrep.2018.10.005",
+    "url": "https://doi.org/10.1016/j.physrep.2018.10.005"
+  },
+  {
+    "year": 2019,
+    "title": "A computational-experimental framework for mapping plant coexistence.",
+    "authors": "Jiang, L., Shi, C., Ye, M., et al.",
+    "journal": "Methods in Ecology and Evolution",
+    "doi": "DOI 10.1111/2041-210X.12981",
+    "url": "https://doi.org/10.1111/2041-210X.12981"
+  },
+  {
+    "year": 2018,
+    "title": "A computational-experimental framework for mapping plant coexistence.",
+    "authors": "Jiang, L., Shi, C., Ye, M., et al.",
+    "journal": "Methods in Ecology and Evolution",
+    "doi": "DOI 10.1111/2041-210X.12981",
+    "url": "https://doi.org/10.1111/2041-210X.12981"
+  }
+]

@@ -50,6 +50,11 @@ export default function AppShell() {
         collapsedWidth="0"
       >
         <div className="app-brand">
+          <img
+            className="app-brand__logo"
+            src="/images/TSA.png"
+            alt={t("sidebar.logo.alt")}
+          />
           <span className="app-brand__name">{t("app.name")}</span>
           <span className="app-brand__subtitle">{t("app.tagline")}</span>
         </div>
@@ -67,7 +72,7 @@ export default function AppShell() {
             {t("nav.retention", { days: session.data?.retention_days ?? 30 })}
           </Typography.Text>
           <Space>
-            <Tag bordered={false}>Anonymous</Tag>
+            <Tag bordered={false}>{t("nav.anonymous")}</Tag>
             <LanguageSwitch />
           </Space>
         </Header>
@@ -83,7 +88,7 @@ export default function AppShell() {
           ) : null}
           <Outlet />
         </Content>
-        <Footer className="app-footer">{t("nav.footer")}</Footer>
+        <Footer className="app-footer">{t("home.footer")}</Footer>
       </Layout>
     </Layout>
   );
