@@ -18,7 +18,7 @@ export default function HomePage() {
 
   return (
     <Space direction="vertical" size={24} style={{ width: "100%" }}>
-      <Card className="hero-card" bordered={false}>
+      <Card className="hero-card" variant="borderless">
         <Title level={1} style={{ marginTop: 0 }}>
           {t("home.title")}
         </Title>

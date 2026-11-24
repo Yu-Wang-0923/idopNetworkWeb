@@ -1,5 +1,6 @@
 import { ArrowLeftOutlined, StopOutlined, RedoOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import {
   Alert,
   App as AntdApp,
@@ -66,6 +67,13 @@ export default function RunDetailPage() {
     onError: () => message.error(t("common.error")),
   });
 
+  const runStatus = runQuery.data?.status;
+  useEffect(() => {
+    if (runStatus && !isActive(runStatus)) {
+      void queryClient.invalidateQueries({ queryKey: ["logs", runId] });
+    }
+  }, [runStatus, runId, queryClient]);
+
   if (runQuery.isLoading) {
     return <Text type="secondary">{t("common.loading")}</Text>;
   }
@@ -114,7 +122,7 @@ export default function RunDetailPage() {
           ) : null}
           {run.stage_key ? (
             <Text type="secondary">
-              {t("run.stage")}: {run.stage_key}
+              {t("run.stage")}: {t(run.stage_key)}
             </Text>
           ) : null}
           <Space wrap>
@@ -245,10 +253,10 @@ export default function RunDetailPage() {
         <Descriptions.Item label={t("column.created")}>
           {dayjs(run.created_at).format("YYYY-MM-DD HH:mm:ss")}
         </Descriptions.Item>
-        <Descriptions.Item label="Started">
+        <Descriptions.Item label={t("run.started")}>
           {run.started_at ? dayjs(run.started_at).format("YYYY-MM-DD HH:mm:ss") : "—"}
         </Descriptions.Item>
-        <Descriptions.Item label="Finished">
+        <Descriptions.Item label={t("run.finished")}>
           {run.finished_at ? dayjs(run.finished_at).format("YYYY-MM-DD HH:mm:ss") : "—"}
         </Descriptions.Item>
       </Descriptions>

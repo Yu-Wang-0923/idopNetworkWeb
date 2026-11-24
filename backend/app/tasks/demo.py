@@ -20,7 +20,6 @@ class DemoParams(BaseModel):
 def _run_demo(ctx: TaskContext) -> None:
     params = DemoParams.model_validate(ctx.params)
     started = datetime.now(timezone.utc)
-    ctx.log("demo.message.ready", steps=params.steps)
     ctx.progress("demo.stage.prepare", 0.05, "demo.message.ready")
 
     for step in range(1, params.steps + 1):

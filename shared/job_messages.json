@@ -3,7 +3,7 @@
   "demo.stage.work": {"zh": "处理中", "en": "Working"},
   "demo.stage.finish": {"zh": "收尾", "en": "Finishing"},
   "demo.message.ready": {"zh": "任务已就绪", "en": "Run ready"},
-  "demo.message.step": {"zh": "步骤 {step}/{total}", "en": "Step {step}/{total}"},
+  "demo.message.step": {"zh": "步骤 {{step}}/{{total}}", "en": "Step {{step}}/{{total}}"},
   "demo.message.done": {"zh": "任务完成", "en": "Run completed"},
   "run.message.queued": {"zh": "排队中", "en": "Queued"},
   "run.message.cancelled": {"zh": "已取消", "en": "Cancelled"},

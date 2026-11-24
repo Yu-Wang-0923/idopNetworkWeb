@@ -25,6 +25,8 @@ No registration or login is required. A signed anonymous workspace cookie groups
 
 Requirements: Python 3.12+, Node.js 20+.
 
+The API and worker must run with a Python interpreter that has the backend dependencies installed. If `python` on your PATH points to another installation, activate the right environment first or use its full path.
+
 Install the backend dependencies (from the repository root):
 
 ```powershell
