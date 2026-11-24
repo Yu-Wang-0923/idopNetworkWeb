@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -16,8 +15,8 @@ from app.pure.funclu import (
     build_funclu_k_export_zip,
     common_feature_count,
     load_curve_fitting_zip,
-    recommend_best_k,
     save_bic_elbow,
+    scan_bic,
 )
 
 
@@ -29,15 +28,13 @@ class FunCluKParams(BaseModel):
 
 
 class FunCluBicParams(BaseModel):
-    mode: Literal["scan", "default"] = "scan"
-    k_min: int = Field(default=2, ge=2, le=10000)
-    k_max: int = Field(default=4, ge=2, le=10000)
+    k_min: int = Field(default=2, ge=1, le=10000)
+    k_max: int = Field(default=20, ge=1, le=10000)
     step: int = Field(default=1, ge=1, le=100)
+    n_init: int = Field(default=5, ge=1, le=10)
     max_iter: int = Field(default=1000, ge=10, le=2000)
     tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
     random_state: int = Field(default=42, ge=0, le=9999)
-    n_random_starts: int = Field(default=1, ge=1, le=10)
-    aggregation: Literal["median", "mean"] = "median"
     min_cluster_size: int = Field(default=1, ge=1, le=10000)
 
 
@@ -300,56 +297,53 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
     ctx.progress("funclu.stage.load", 0.02, "funclu.message.loading", name=path.name)
     curve_sample, quasi_dynamic, conditions, frames, features = _prepare(ctx, path)
 
-    if params.mode == "default":
-        k_min = 2
-        k_max = min(features, max(2, int(np.sqrt(features))))
-        step = 1
-    else:
-        k_min = params.k_min
-        k_max = min(params.k_max, features)
-        step = params.step
+    k_min = params.k_min
+    k_max = min(params.k_max, features)
     if k_max < k_min:
         raise ValueError(
             f"k_max={k_max} is below k_min={k_min} for {features} shared features"
         )
-    ks = list(range(k_min, k_max + 1, step))
 
-    from idopnetwork.clustering.funclu import compute_bic_scores
     from idopnetwork.curve_fitting import get_power_function_params
 
     parameters = [
         get_power_function_params(quasi_dynamic[name]) for name in conditions
     ]
 
-    def on_progress(index: int, total: int) -> None:
-        ctx.check_cancelled()
+    def on_progress(k: int, index: int, total: int) -> None:
         ctx.progress(
             "funclu.stage.bic",
             0.05 + 0.80 * index / max(1, total),
             "funclu.message.bic",
-            k=ks[index - 1],
+            k=k,
             index=index,
             total=total,
         )
 
     ctx.check_cancelled()
-    bic_df = compute_bic_scores(
-        data=frames,
-        parameter_data=parameters,
+    bic_df = scan_bic(
+        frames,
+        parameters,
         k_min=k_min,
         k_max=k_max,
-        step=step,
+        step=params.step,
+        n_init=params.n_init,
         max_iter=params.max_iter,
         tol=params.tol,
         random_state=params.random_state,
-        n_random_starts=params.n_random_starts,
-        aggregation=params.aggregation,
         min_cluster_size=params.min_cluster_size,
-        progress_callback=on_progress,
+        progress=on_progress,
+        check=ctx.check_cancelled,
     )
     ctx.check_cancelled()
 
-    best_k, raw_best, candidates = recommend_best_k(bic_df, mode=params.mode)
+    selected = bic_df[bic_df["selected"]].iloc[0]
+    best_k = int(selected["K"])
+    valid = bic_df.dropna(subset=["BIC"])
+    raw_best = int(valid.loc[valid["BIC"].idxmin(), "K"])
+    eligible_count = int(bic_df["eligible"].sum())
+    min_size_violated = eligible_count == 0
+
     ctx.progress("funclu.stage.export", 0.90, "funclu.message.exporting")
     csv_path = _write_text(
         ctx.output_dir / "funclu_bic_results.csv", bic_df.to_csv(index=False)
@@ -366,8 +360,7 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         bic_df,
         ctx.output_dir / "charts" / "bic_elbow.png",
         best_k=best_k,
-        candidate_ks=candidates or None,
-        auto_select_best=params.mode != "default",
+        auto_select_best=False,
     )
     ctx.add_artifact(
         elbow_path,
@@ -376,31 +369,31 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         kind="png",
         mime="image/png",
     )
-    best_row = None
-    if best_k is not None:
-        match = bic_df[bic_df["K"].astype(int) == best_k]
-        if not match.empty:
-            row = match.iloc[0]
-            best_row = {
-                "K": int(row["K"]),
-                "BIC": float(row["BIC"]),
-                "SI": _finite(row["SI"]),
-                "converged_rate": _finite(row["converged_rate"]),
-                "passes_min_cluster_size": bool(row["passes_min_cluster_size"]),
-            }
+    best_row = {
+        "K": best_k,
+        "BIC": _finite(selected["BIC"]),
+        "AIC": _finite(selected["AIC"]),
+        "delta_bic": _finite(selected["delta_bic"]),
+        "SI": _finite(selected["SI"]),
+        "converged": bool(selected["converged"]),
+        "min_cluster_size": int(selected["min_cluster_size"]),
+        "n_parameters": int(selected["n_parameters"]),
+    }
     summary = {
         "task": "funclu.bic",
         "conditions": conditions,
         "n_conditions": len(conditions),
         "n_features": features,
-        "mode": params.mode,
         "k_min": k_min,
         "k_max": k_max,
-        "step": step,
-        "k_values": ks,
+        "step": params.step,
+        "n_init": params.n_init,
+        "k_values": [int(k) for k in bic_df["K"]],
         "recommended_k": best_k,
         "raw_best_k": raw_best,
-        "checkmark_candidates": candidates,
+        "selected_at_boundary": best_k in {k_min, k_max},
+        "eligible_count": eligible_count,
+        "min_size_violated": min_size_violated,
         "best_row": best_row,
         "rows": int(len(bic_df)),
         "params": params.model_dump(),
@@ -420,8 +413,8 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "funclu.stage.export",
         1.0,
         "funclu.message.bic_done",
-        best=best_k if best_k is not None else "—",
-        total=len(ks),
+        best=best_k,
+        total=len(bic_df),
     )
 
 

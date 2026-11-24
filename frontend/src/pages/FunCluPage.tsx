@@ -27,7 +27,6 @@ const { Title, Paragraph, Text } = Typography;
 const { Dragger } = Upload;
 
 type Source = "upload" | "history";
-type BicMode = "scan" | "default";
 
 interface SelectedInput {
   source: "dataset" | "artifact";
@@ -45,15 +44,13 @@ interface KValues {
 }
 
 interface BicValues {
-  mode: BicMode;
   k_min: number;
   k_max: number;
   step: number;
+  n_init: number;
   max_iter: number;
   tol: number;
   random_state: number;
-  n_random_starts: number;
-  aggregation: "median" | "mean";
   min_cluster_size: number;
 }
 
@@ -168,9 +165,20 @@ function BicForm({ input }: { input: SelectedInput | null }) {
   const navigate = useNavigate();
   const { message } = AntdApp.useApp();
   const [form] = Form.useForm<BicValues>();
-  const mode = Form.useWatch("mode", form) ?? "scan";
   const [submitting, setSubmitting] = useState(false);
-  const isScan = mode === "scan";
+
+  useEffect(() => {
+    const features = input?.features;
+    if (!features) {
+      return;
+    }
+    const kMin = Math.min(form.getFieldValue("k_min") ?? 2, features);
+    const kMax = Math.max(
+      kMin,
+      Math.min(form.getFieldValue("k_max") ?? 20, features),
+    );
+    form.setFieldsValue({ k_min: kMin, k_max: kMax });
+  }, [input, form]);
 
   const submit = async (values: BicValues) => {
     if (!input) {
@@ -199,55 +207,41 @@ function BicForm({ input }: { input: SelectedInput | null }) {
       name="funclu-bic"
       layout="vertical"
       initialValues={{
-        mode: "scan",
         k_min: 2,
-        k_max: 4,
+        k_max: 20,
         step: 1,
+        n_init: 5,
         max_iter: 1000,
         tol: 0.0001,
         random_state: 42,
-        n_random_starts: 1,
-        aggregation: "median",
         min_cluster_size: 1,
       }}
       onFinish={submit}
     >
-      <Form.Item label={t("funclu.bic.mode")} name="mode">
-        <Segmented
-          block
-          options={[
-            { label: t("funclu.bic.mode.scan"), value: "scan" },
-            { label: t("funclu.bic.mode.default"), value: "default" },
-          ]}
-        />
-      </Form.Item>
-      <Text type="secondary" style={{ display: "block", marginBottom: 12 }}>
-        {isScan
-          ? t("funclu.bic.modeHint.scan")
-          : t("funclu.bic.modeHint.default")}
-      </Text>
-
-      {isScan ? (
-        <Row gutter={12}>
-          <Col span={8}>
-            <Form.Item label={t("funclu.bic.kMin")} name="k_min">
-              <InputNumber min={2} max={10000} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item label={t("funclu.bic.kMax")} name="k_max">
-              <InputNumber min={2} max={10000} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-          <Col span={8}>
-            <Form.Item label={t("funclu.bic.step")} name="step">
-              <InputNumber min={1} max={100} style={{ width: "100%" }} />
-            </Form.Item>
-          </Col>
-        </Row>
-      ) : null}
+      <Row gutter={12}>
+        <Col span={8}>
+          <Form.Item label={t("funclu.bic.kMin")} name="k_min">
+            <InputNumber min={1} max={10000} style={{ width: "100%" }} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item label={t("funclu.bic.kMax")} name="k_max">
+            <InputNumber min={1} max={10000} style={{ width: "100%" }} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item label={t("funclu.bic.step")} name="step">
+            <InputNumber min={1} max={100} style={{ width: "100%" }} />
+          </Form.Item>
+        </Col>
+      </Row>
 
       <Row gutter={12}>
+        <Col span={8}>
+          <Form.Item label={t("funclu.bic.nInit")} name="n_init">
+            <InputNumber min={1} max={10} style={{ width: "100%" }} />
+          </Form.Item>
+        </Col>
         <Col span={8}>
           <Form.Item label={t("funclu.bic.maxIter")} name="max_iter">
             <InputNumber min={10} max={2000} step={10} style={{ width: "100%" }} />
@@ -261,21 +255,6 @@ function BicForm({ input }: { input: SelectedInput | null }) {
         <Col span={8}>
           <Form.Item label={t("funclu.bic.randomState")} name="random_state">
             <InputNumber min={0} max={9999} style={{ width: "100%" }} />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item label={t("funclu.bic.randomStarts")} name="n_random_starts">
-            <InputNumber min={1} max={10} style={{ width: "100%" }} />
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item label={t("funclu.bic.aggregation")} name="aggregation">
-            <Select
-              options={[
-                { value: "median", label: t("funclu.bic.aggregation.median") },
-                { value: "mean", label: t("funclu.bic.aggregation.mean") },
-              ]}
-            />
           </Form.Item>
         </Col>
         <Col span={8}>

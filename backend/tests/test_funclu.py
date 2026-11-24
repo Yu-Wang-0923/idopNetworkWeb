@@ -129,15 +129,13 @@ def test_funclu_bic_end_to_end(client):
         client,
         "funclu.bic",
         {
-            "mode": "scan",
             "k_min": 2,
             "k_max": 3,
             "step": 1,
+            "n_init": 1,
             "max_iter": 200,
             "tol": 1e-4,
             "random_state": 42,
-            "n_random_starts": 1,
-            "aggregation": "median",
             "min_cluster_size": 1,
         },
         dataset,
@@ -157,8 +155,20 @@ def test_funclu_bic_end_to_end(client):
     download = client.get(f"/api/artifacts/{csv_artifact['id']}/download")
     frame = pd.read_csv(io.BytesIO(download.content))
     assert set(frame["K"]) == {2, 3}
-    assert "BIC" in frame.columns
-    assert "passes_min_cluster_size" in frame.columns
+    for column in (
+        "BIC",
+        "AIC",
+        "n_parameters",
+        "covariance_model",
+        "eligible",
+        "delta_bic",
+        "selected",
+    ):
+        assert column in frame.columns
+    assert int(frame["selected"].sum()) == 1
+    selected = frame[frame["selected"]].iloc[0]
+    assert selected["delta_bic"] == 0
+    assert selected["BIC"] == frame["BIC"].min()
 
     elbow = artifact(detail, "charts/bic_elbow.png")
     png = client.get(f"/api/artifacts/{elbow['id']}/content")
@@ -171,7 +181,30 @@ def test_funclu_bic_end_to_end(client):
         client.get(f"/api/artifacts/{summary['id']}/download").content
     )
     assert payload["k_values"] == [2, 3]
-    assert payload["recommended_k"] in {2, 3}
+    assert payload["recommended_k"] == int(selected["K"])
+    assert payload["eligible_count"] == 2
+    assert payload["best_row"]["AIC"] is not None
+
+
+def test_scan_bic_can_select_a_single_module():
+    from app.pure.funclu import load_curve_fitting_zip, scan_bic
+    from idopnetwork.curve_fitting import get_power_function_params
+
+    curve, quasi = load_curve_fitting_zip(curve_zip_bytes())
+    names = list(curve)
+    table = scan_bic(
+        [curve[name] for name in names],
+        [get_power_function_params(quasi[name]) for name in names],
+        k_min=1,
+        k_max=2,
+        step=1,
+        n_init=1,
+        max_iter=200,
+    )
+    assert set(table["K"]) == {1, 2}
+    assert int(table["selected"].sum()) == 1
+    selected = table[table["selected"]].iloc[0]
+    assert selected["BIC"] == table["BIC"].min()
 
 
 def test_funclu_rejects_zip_without_curve_tables(client):
@@ -193,24 +226,23 @@ def test_funclu_bic_cancels_at_k_boundary(client, monkeypatch):
     run = create_funclu_run(
         client,
         "funclu.bic",
-        {"mode": "scan", "k_min": 2, "k_max": 3, "step": 1},
+        {"k_min": 2, "k_max": 3, "step": 1, "n_init": 1},
         dataset,
     )
 
     from app.db import get_session_factory
     from app.models import Run
 
-    def fake_compute_bic_scores(**kwargs):
+    def fake_scan_bic(*args, progress=None, check=None, **kwargs):
         with get_session_factory()() as db:
             record = db.get(Run, run["id"])
             record.cancel_requested = True
             db.commit()
-        kwargs["progress_callback"](1, 2)
+        progress(2, 1, 2)
+        check()
         raise AssertionError("cancellation should stop the scan before K=3")
 
-    monkeypatch.setattr(
-        "idopnetwork.clustering.funclu.compute_bic_scores", fake_compute_bic_scores
-    )
+    monkeypatch.setattr("app.tasks.funclu.scan_bic", fake_scan_bic)
     assert execute_run(run["id"]) == 0
     detail = client.get(f"/api/runs/{run['id']}").json()
     assert detail["status"] == "cancelled"

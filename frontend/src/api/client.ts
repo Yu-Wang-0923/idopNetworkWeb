@@ -1,5 +1,6 @@
 import type {
   Artifact,
+  ArtifactTable,
   CreateRunPayload,
   Dataset,
   InspectResult,
@@ -92,4 +93,6 @@ export const api = {
   },
   inspectArtifact: (artifactId: string) =>
     request<InspectResult>(`/artifacts/${artifactId}/inspect`),
+  artifactTable: (artifactId: string, limit = 500) =>
+    request<ArtifactTable>(`/artifacts/${artifactId}/table?limit=${limit}`),
 };

@@ -9,9 +9,11 @@ import {
   Descriptions,
   Image,
   List,
+  Modal,
   Progress,
   Select,
   Space,
+  Table,
   Tag,
   Typography,
 } from "antd";
@@ -21,9 +23,24 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import HtmlArtifactFrame from "../components/HtmlArtifactFrame";
 import StatusTag from "../components/StatusTag";
-import type { LogEntry, RunMessage } from "../types";
+import type { Artifact, LogEntry, RunMessage } from "../types";
 
 const { Title, Paragraph, Text } = Typography;
+
+function formatCell(
+  value: string | number | boolean | null,
+): string | number {
+  if (value === null || value === undefined) {
+    return "—";
+  }
+  if (typeof value === "boolean") {
+    return value ? "True" : "False";
+  }
+  if (typeof value === "number" && !Number.isInteger(value)) {
+    return Number(value.toPrecision(6));
+  }
+  return value;
+}
 
 function isActive(status: string | undefined): boolean {
   return status === "queued" || status === "running";
@@ -70,6 +87,12 @@ export default function RunDetailPage() {
   });
 
   const [selectedChart, setSelectedChart] = useState<string | null>(null);
+  const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
+  const tableQuery = useQuery({
+    queryKey: ["artifact-table", previewArtifact?.id],
+    queryFn: () => api.artifactTable(previewArtifact?.id ?? ""),
+    enabled: Boolean(previewArtifact),
+  });
   const runStatus = runQuery.data?.status;
   const artifactList = runQuery.data?.artifacts;
   useEffect(() => {
@@ -312,6 +335,17 @@ export default function RunDetailPage() {
             renderItem={(artifact) => (
               <List.Item
                 actions={[
+                  ...(artifact.kind === "csv"
+                    ? [
+                        <Button
+                          key="preview"
+                          type="link"
+                          onClick={() => setPreviewArtifact(artifact)}
+                        >
+                          {t("artifact.previewTable")}
+                        </Button>,
+                      ]
+                    : []),
                   <Button
                     key="download"
                     type="link"
@@ -375,6 +409,41 @@ export default function RunDetailPage() {
           {run.finished_at ? dayjs(run.finished_at).format("YYYY-MM-DD HH:mm:ss") : "—"}
         </Descriptions.Item>
       </Descriptions>
+
+      <Modal
+        open={Boolean(previewArtifact)}
+        onCancel={() => setPreviewArtifact(null)}
+        footer={null}
+        width={1000}
+        title={previewArtifact?.logical_name}
+      >
+        {tableQuery.isLoading ? (
+          <Text type="secondary">{t("common.loading")}</Text>
+        ) : tableQuery.isError || !tableQuery.data ? (
+          <Alert type="error" showIcon message={t("common.error")} />
+        ) : (
+          <Table
+            size="small"
+            bordered
+            pagination={false}
+            scroll={{ x: "max-content", y: 420 }}
+            columns={tableQuery.data.columns.map((name, index) => ({
+              title: name,
+              key: `${name}-${index}`,
+              render: (
+                _value: unknown,
+                record: {
+                  cells: Array<string | number | boolean | null>;
+                },
+              ) => formatCell(record.cells[index]),
+            }))}
+            dataSource={tableQuery.data.rows.map((row, index) => ({
+              key: index,
+              cells: row,
+            }))}
+          />
+        )}
+      </Modal>
     </Space>
   );
 }

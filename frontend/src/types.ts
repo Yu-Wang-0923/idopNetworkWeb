@@ -97,6 +97,12 @@ export interface InspectResult {
   features?: number | null;
 }
 
+export interface ArtifactTable {
+  columns: string[];
+  rows: Array<Array<string | number | boolean | null>>;
+  total: number;
+}
+
 export interface CreateRunPayload {
   task_key: string;
   params: object;

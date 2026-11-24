@@ -5,9 +5,10 @@
 from __future__ import annotations
 
 import io
+import math
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -154,70 +155,173 @@ def build_funclu_k_export_zip(
     return buffer.getvalue()
 
 
-def checkmark_candidates(
-    bic_df: pd.DataFrame, *, max_short_arm: int = 3
-) -> list[int]:
-    """K values that sit at a checkmark-like local BIC minimum."""
-    if bic_df is None or "K" not in bic_df.columns or "BIC" not in bic_df.columns:
-        return []
-    frame = bic_df.dropna(subset=["K", "BIC"]).sort_values("K")
-    if len(frame) < 3:
-        return []
-    ks = frame["K"].to_numpy(dtype=int)
-    bics = frame["BIC"].to_numpy(dtype=float)
-    scale = float(np.nanmax(np.abs(bics))) if bics.size else 1.0
-    eps = max(1e-9, scale * 1e-12)
+def _silhouette_index(
+    data: list[pd.DataFrame], common_cols: list[str], labels: np.ndarray
+) -> float:
+    from sklearn.metrics import silhouette_score
 
-    candidates: list[int] = []
-    for idx in range(1, len(bics) - 1):
-        if not (bics[idx] + eps < bics[idx - 1] and bics[idx] + eps < bics[idx + 1]):
-            continue
-        left_len = 0
-        last = bics[idx]
-        for j in range(idx - 1, -1, -1):
-            if bics[j] > last + eps:
-                left_len += 1
-                last = bics[j]
-            else:
-                break
-        right_len = 0
-        last = bics[idx]
-        for j in range(idx + 1, len(bics)):
-            if bics[j] > last + eps:
-                right_len += 1
-                last = bics[j]
-            else:
-                break
-        short_arm = min(left_len, right_len)
-        long_arm = max(left_len, right_len)
-        if (
-            left_len >= 1
-            and right_len >= 1
-            and short_arm <= max_short_arm
-            and long_arm > short_arm
-        ):
-            candidates.append(int(ks[idx]))
-    return candidates
+    if labels.size < 3 or np.unique(labels).size < 2:
+        return float("nan")
+    try:
+        matrix = np.concatenate(
+            [
+                frame.loc[:, common_cols].to_numpy(dtype=float).T
+                for frame in data
+            ],
+            axis=1,
+        )
+        mean = np.nanmean(matrix, axis=0)
+        mean = np.where(np.isfinite(mean), mean, 0.0)
+        matrix = np.where(np.isfinite(matrix), matrix, mean)
+        scale = np.nanstd(matrix, axis=0)
+        scale = np.where(np.isfinite(scale) & (scale > 1e-12), scale, 1.0)
+        return float(silhouette_score((matrix - mean) / scale, labels))
+    except Exception:
+        return float("nan")
 
 
-def recommend_best_k(
-    bic_df: pd.DataFrame, *, mode: str
-) -> tuple[int | None, int | None, list[int]]:
-    """Return (recommended, raw_min_bic, candidates) for the BIC table."""
-    valid = bic_df.dropna(subset=["BIC"])
+def scan_bic(
+    data: list[pd.DataFrame],
+    parameter_data: list[pd.DataFrame],
+    *,
+    k_min: int = 2,
+    k_max: int = 10,
+    step: int = 1,
+    n_init: int = 5,
+    max_iter: int = 1000,
+    tol: float = 1e-4,
+    random_state: int = 42,
+    min_cluster_size: int = 1,
+    progress: Callable[[int, int, int], None] | None = None,
+    check: Callable[[], None] | None = None,
+) -> pd.DataFrame:
+    """Scan K with the Fast-Funclu selection procedure.
+
+    Each candidate keeps the highest-likelihood run over ``n_init`` starting
+    seeds instead of aggregating seeds, then reports BIC, AIC, parameter
+    counts, convergence and module sizes.  The selected model is the lowest
+    BIC among candidates whose smallest module meets ``min_cluster_size``;
+    ``delta_bic`` is measured against it.  The core model exposes S4
+    (condition-specific phi and gamma, shared across modules) only.
+    """
+    from idopnetwork.clustering.funclu import FunClu
+
+    if not data:
+        raise ValueError("FunClu requires at least one condition")
+    if k_min < 1:
+        raise ValueError("k_min must be at least 1")
+    if min_cluster_size < 1:
+        raise ValueError("min_cluster_size must be at least 1")
+    n_features = min(int(frame.shape[1]) for frame in data)
+    effective_max = min(int(k_max), n_features)
+    ks = list(range(int(k_min), effective_max + 1, int(step)))
+    if not ks:
+        raise ValueError(
+            f"No K values to scan: k_min={k_min}, k_max={k_max}, features={n_features}"
+        )
+    n_init = max(1, int(n_init))
+
+    rows: list[dict[str, Any]] = []
+    for index, k in enumerate(ks):
+        best = None
+        errors: list[str] = []
+        for offset in range(n_init):
+            if check is not None:
+                check()
+            try:
+                model = FunClu(
+                    n_components=k,
+                    max_iter=max_iter,
+                    tol=tol,
+                    random_state=int(random_state) + offset,
+                )
+                model.fit(data, parameter_data=parameter_data)
+            except Exception as exc:  # noqa: BLE001 - a single start may fail
+                errors.append(str(exc))
+                continue
+            if best is None or model.log_likelihood > best.log_likelihood:
+                best = model
+        if best is None:
+            rows.append(
+                {
+                    "K": k,
+                    "covariance_model": "S4",
+                    "BIC": float("nan"),
+                    "AIC": float("nan"),
+                    "error": "; ".join(errors),
+                }
+            )
+        else:
+            labels = best.labels.detach().cpu().numpy().astype(int)
+            counts = np.bincount(labels, minlength=k)
+            sizes = [int(count) for count in counts]
+            n_parameters = int(best.n_params)
+            rows.append(
+                {
+                    "K": k,
+                    "covariance_model": "S4",
+                    "n_parameters": n_parameters,
+                    "bic_penalty": float(
+                        n_parameters * math.log(max(int(best.n_features), 1))
+                    ),
+                    "BIC": float(best.bic),
+                    "AIC": float(
+                        -2.0 * float(best.log_likelihood) + 2.0 * n_parameters
+                    ),
+                    "log_likelihood": float(best.log_likelihood),
+                    "SI": _silhouette_index(
+                        data, list(best.common_cols), labels
+                    ),
+                    "converged": bool(best.converged),
+                    "n_iter": int(best.n_iter_run),
+                    "n_init": n_init,
+                    "n_features": int(best.n_features),
+                    "n_conditions": int(best.n_conditions),
+                    "min_cluster_size": int(min(sizes)),
+                    "max_cluster_size": int(max(sizes)),
+                    "cluster_sizes": ";".join(str(size) for size in sizes),
+                    "error": "; ".join(errors),
+                }
+            )
+        if progress is not None:
+            progress(k, index + 1, len(ks))
+
+    table = pd.DataFrame(rows)
+    valid = table.dropna(subset=["BIC"])
     if valid.empty:
-        return None, None, []
-    raw_best = int(valid.loc[valid["BIC"].idxmin(), "K"])
-    if mode == "default":
-        candidates = checkmark_candidates(bic_df)
-        return (min(candidates) if candidates else None), raw_best, candidates
-    if "passes_min_cluster_size" in valid.columns:
-        eligible = valid[valid["passes_min_cluster_size"].astype(bool)]
-    else:
-        eligible = valid
+        raise ValueError("No BIC candidate could be fitted")
+    table["eligible"] = (
+        table["min_cluster_size"].fillna(-1).astype(int) >= int(min_cluster_size)
+    )
+    eligible = table[table["eligible"] & table["BIC"].notna()]
     pool = eligible if not eligible.empty else valid
-    best = int(pool.loc[pool["BIC"].idxmin(), "K"])
-    return best, raw_best, []
+    best_index = pool["BIC"].idxmin()
+    table["delta_bic"] = table["BIC"] - table.loc[best_index, "BIC"]
+    table["selected"] = False
+    table.loc[best_index, "selected"] = True
+    leading = [
+        "K",
+        "covariance_model",
+        "BIC",
+        "delta_bic",
+        "selected",
+        "eligible",
+        "AIC",
+        "n_parameters",
+        "bic_penalty",
+        "log_likelihood",
+        "SI",
+        "converged",
+        "min_cluster_size",
+        "max_cluster_size",
+        "cluster_sizes",
+        "n_iter",
+        "n_init",
+        "n_features",
+        "n_conditions",
+        "error",
+    ]
+    return table[[column for column in leading if column in table.columns]]
 
 
 def save_bic_elbow(
@@ -237,6 +341,8 @@ def save_bic_elbow(
         candidate_Ks=candidate_ks,
         auto_select_best=auto_select_best,
         show_in_streamlit=False,
+        title="FunClu BIC across K (S4 covariance)",
+        ylabel="BIC (lower is better)",
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(path, dpi=200, bbox_inches="tight")
