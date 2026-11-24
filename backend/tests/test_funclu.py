@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import zipfile
 
 import numpy as np
@@ -132,6 +133,16 @@ def test_funclu_k_end_to_end(client):
     assert "sandbox" in content.headers["content-security-policy"]
     assert "M1" in content.text and "M2" in content.text
     assert "alpha.csv" in content.text
+    # The figure's mean line is the fitted cluster mean exported as the center.
+    match = re.search(r"DATA = (\{.*\});\s*if \(!DATA\) return;", content.text, re.S)
+    chart_data = json.loads(match.group(1))
+    alpha = next(
+        series
+        for series in chart_data["panels"][0]["series"]
+        if series["label"] == "alpha.csv"
+    )
+    assert len(alpha["xs"]) == 12 and len(alpha["obs_xs"]) == 8
+    np.testing.assert_allclose(alpha["mean"], centers["M1"].to_numpy(), atol=1e-4)
 
     summary = artifact(detail, "funclu_k_summary.json")
     payload = json.loads(
@@ -168,6 +179,26 @@ def test_funclu_clusters_observations_not_sampled_curves(client, monkeypatch):
     for frame, name in zip(frames, quasi):
         pd.testing.assert_frame_equal(frame, quasi[name].loc[:, frame.columns])
         assert len(frame) != len(curve[name])
+
+
+def test_cluster_panels_use_model_means_and_both_member_tables():
+    from app.pure.charts import funclu_html
+
+    grid = [1.0, 2.0, 3.0]
+    curves = {"c": pd.DataFrame({"a": [1.0, 2.0, 3.0], "b": [2.0, 3.0, 4.0]}, index=grid)}
+    observed = {"c": pd.DataFrame({"a": [1.1, 2.2], "b": [1.9, 3.1]}, index=[1.5, 2.5])}
+    means = {"c": np.array([[10.0, 20.0, 30.0]])}
+    panels = funclu_html.build_cluster_panels(
+        curves, observed, means, np.array([0, 0]), ["a", "b"], 1
+    )
+    (series,) = panels[0]["series"]
+    assert series["xs"] == grid
+    assert series["mean"] == [10.0, 20.0, 30.0]
+    assert series["curves"] == [[1.0, 2.0, 3.0], [2.0, 3.0, 4.0]]
+    assert series["obs_xs"] == [1.5, 2.5]
+    assert series["observations"] == [[1.1, 2.2], [1.9, 3.1]]
+    html = funclu_html.render(panels, conditions=["c"])
+    assert 'id="membermode"' in html
 
 
 def test_mean_curves_at_matches_the_fitted_means():

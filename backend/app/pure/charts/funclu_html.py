@@ -6,12 +6,12 @@
 Derived from the Curve Fitting publication renderer: points are authored in
 points (physical mm sizing), the left panel holds collapsible publication
 controls, and exports are vector SVG / DPI PNG. One panel per cluster; each
-condition contributes member curves and a mean curve.
+condition contributes its members (observations or fitted curves, switchable in
+the figure) and the fitted FunClu mean curve.
 """
 from __future__ import annotations
 
 import json
-import math
 from typing import Any, Iterable
 
 import numpy as np
@@ -32,52 +32,46 @@ def _round(values: Iterable[float], digits: int = 4) -> list[float]:
 
 def build_cluster_panels(
     curve_frames: dict[str, Any],
+    observed_frames: dict[str, Any],
+    mean_curves: dict[str, np.ndarray],
     labels: np.ndarray,
     common_cols: list[str],
     n_components: int,
     *,
-    show_members: bool = True,
-    show_ci: bool = False,
     max_members: int = 40,
 ) -> list[dict[str, Any]]:
-    """Pack per-cluster series (mean, CI band, member curves) for the renderer."""
+    """Pack per-cluster series for the renderer.
+
+    ``mean_curves[cond]`` holds the fitted FunClu cluster means (K x grid) on
+    that condition's curve_sample grid; the figure always draws them as the
+    mean line.  Each member carries both its fitted curve (curve_sample) and its
+    observations (quasi_dynamic) so the figure can switch between the two.
+    """
     labels = np.asarray(labels, dtype=int).ravel()
     if labels.size != len(common_cols):
         raise ValueError("labels do not match common columns")
 
     panels: list[dict[str, Any]] = []
     for k in range(n_components):
-        member_idx = np.flatnonzero(labels == k)
-        members = [common_cols[i] for i in member_idx]
+        members = [common_cols[i] for i in np.flatnonzero(labels == k)]
         series = []
-        for cond_order, (cond, frame) in enumerate(curve_frames.items()):
-            cols = [c for c in members if c in frame.columns]
-            if not cols:
-                continue
-            block = frame.loc[:, cols].astype(float)
-            mean = block.mean(axis=1).to_numpy()
-            if show_ci and len(cols) > 1:
-                sem = block.std(axis=1, ddof=1).to_numpy() / math.sqrt(len(cols))
-                lo = mean - 1.96 * sem
-                hi = mean + 1.96 * sem
-            else:
-                lo = hi = None
-            member_lines = []
-            if show_members:
-                step = max(1, len(cols) // max_members)
-                for col in cols[::step][:max_members]:
-                    member_lines.append(_round(frame.loc[:, col].astype(float).to_numpy()))
-            color, band = CONDITION_COLORS[cond_order % len(CONDITION_COLORS)]
+        for cond_order, (cond, curves) in enumerate(curve_frames.items()):
+            observed = observed_frames[cond]
+            cols = [c for c in members if c in curves.columns and c in observed.columns]
+            step = max(1, len(cols) // max_members)
+            shown = cols[::step][:max_members]
+            color = CONDITION_COLORS[cond_order % len(CONDITION_COLORS)][0]
             series.append({
                 "label": str(cond),
-                "xs": [round(float(v), 4) for v in frame.index],
-                "mean": _round(mean),
-                "lo": _round(lo) if lo is not None else None,
-                "hi": _round(hi) if hi is not None else None,
-                "members": member_lines,
+                "xs": _round(curves.index),
+                "mean": _round(np.asarray(mean_curves[cond], dtype=float)[k]),
+                "curves": [_round(curves[col].astype(float).to_numpy()) for col in shown],
+                "obs_xs": _round(observed.index),
+                "observations": [
+                    _round(observed[col].astype(float).to_numpy()) for col in shown
+                ],
                 "dcolor": color,
                 "ccolor": color,
-                "band": band,
             })
         panels.append({
             "name": f"M{k + 1}",
@@ -225,14 +219,21 @@ TEMPLATE = r"""<!DOCTYPE html>
       </div>
     </details>
 
-    <details>
+    <details open>
       <summary>图元</summary>
       <div class="body">
+        <div class="row"><span>成员数据</span>
+          <select id="membermode">
+            <option value="observations" selected>观测值 quasi_dynamic</option>
+            <option value="curves">拟合曲线 curve_sample</option>
+          </select>
+        </div>
+        <div class="row"><span>显示成员</span><input id="showmembers" type="checkbox" checked></div>
         <div class="row"><span>均值线宽 pt</span><input id="lw" type="number" min="0.5" max="4" step="0.25" value="1.5"></div>
         <div class="row"><span>成员线宽 pt</span><input id="memberlw" type="number" min="0.1" max="3" step="0.1" value="1"></div>
+        <div class="row"><span>观测点直径 pt</span><input id="msize" type="number" min="0.5" max="8" step="0.5" value="2.5"></div>
         <div class="row"><span>成员透明度 %</span><input id="memberalpha" type="number" min="5" max="80" step="5" value="20"></div>
-        <div class="row"><span>成员曲线</span><input id="showmembers" type="checkbox" checked></div>
-        <div class="row"><span>95% CI</span><input id="showci" type="checkbox"></div>
+        <div class="note">均值线是 FunClu 模型拟合的簇均值曲线。</div>
       </div>
     </details>
 
@@ -308,11 +309,11 @@ function settings() {
     ylabel: $("ylabel").value.trim(),
     xoff: Math.max(0, +$("xoff").value || 0),
     yoff: Math.max(0, +$("yoff").value || 0),
-    msize: 6.5,
+    msize: Math.max(0.5, Math.min(8, +$("msize").value || 2.5)),
     memberLw: Math.max(0.1, Math.min(3, +$("memberlw").value || 0.6)),
     memberAlpha: Math.max(0.05, Math.min(0.8, (+$("memberalpha").value || 25) / 100)),
     members: $("showmembers").checked,
-    ciOn: $("showci").checked,
+    memberMode: $("membermode").value,
     lw: Math.max(0.5, Math.min(4, +$("lw").value || 1.5)),
   };
 }
@@ -355,13 +356,18 @@ const cells = s.layout === "col"
       : pageCells.map(p => ({p, cond: null, series: p.series || []}));
   const lastRow = Math.max(0, Math.ceil(cells.length / effCols) - 1);
 
+  const obsMode = s.memberMode === "observations";
+  // Ranges cover the mean and whichever members are drawn, so no point is clipped.
+  const memberSets = ser => !s.members ? [] : (obsMode ? ser.observations : ser.curves);
+  const seriesYs = ser => ser.mean.concat(...memberSets(ser)).filter(Number.isFinite);
+  const seriesXs = ser => (s.members && obsMode) ? ser.xs.concat(ser.obs_xs) : ser.xs;
   let xlo = Infinity, xhi = -Infinity, shared = [Infinity, -Infinity];
   cells.forEach(cell => {
     cell.series.forEach(ser => {
-      const [a, b] = range(ser.xs);
+      const [a, b] = range(seriesXs(ser));
       xlo = Math.min(xlo, a); xhi = Math.max(xhi, b);
-      shared = [Math.min(shared[0], Math.min(...ser.mean)),
-                Math.max(shared[1], Math.max(...ser.mean))];
+      const [lo, hi] = range(seriesYs(ser));
+      shared = [Math.min(shared[0], lo), Math.max(shared[1], hi)];
     });
   });
   const xSpan = xhi - xlo;
@@ -386,7 +392,7 @@ const cells = s.layout === "col"
     let ylo, yhi;
     if (s.sharey) [ylo, yhi] = sharedYs;
     else {
-      const vals = cellSeries.flatMap(ser => ser.mean.concat(ser.lo || [], ser.hi || []));
+      const vals = cellSeries.flatMap(ser => seriesYs(ser));
       const [a, b] = range(vals), span = (b - a) || 1;
       ylo = a - span * s.myb; yhi = b + span * s.myt;
     }
@@ -447,15 +453,16 @@ const cells = s.layout === "col"
     const marks = el("g", {"clip-path": `url(#${clipId})`});
     cellSeries.forEach(ser => {
       const sx = ser.xs;
-      if (s.ciOn && ser.lo && ser.hi) {
-        const up = sx.map((cx, k) => `${x(cx).toFixed(2)},${y(ser.hi[k]).toFixed(2)}`);
-        const dn = sx.map((cx, k) => `${x(cx).toFixed(2)},${y(ser.lo[k]).toFixed(2)}`).reverse();
-        marks.appendChild(el("path", {
-          d: `M${up.join(" L")} L${dn.join(" L")} Z`,
-          fill: ser.band || "#dbe5f2", stroke: "none", opacity: 0.7}));
-      }
-      if (s.members) {
-        ser.members.forEach(line => {
+      if (s.members && obsMode) {
+        ser.observations.forEach(values => values.forEach((v, k) => {
+          if (!Number.isFinite(v)) return;
+          marks.appendChild(el("circle", {
+            cx: x(ser.obs_xs[k]).toFixed(2), cy: y(v).toFixed(2), r: s.msize / 2,
+            fill: "none", stroke: ser.dcolor || s.dcolor,
+            "stroke-width": s.memberLw * 0.75, opacity: s.memberAlpha}));
+        }));
+      } else if (s.members) {
+        ser.curves.forEach(line => {
           const d = line.map((v, k) =>
             `${k ? "L" : "M"}${x(sx[k]).toFixed(2)},${y(v).toFixed(2)}`).join(" ");
           marks.appendChild(el("path", {d, fill: "none", stroke: ser.dcolor || s.dcolor,
@@ -563,7 +570,7 @@ function render() {
 ["cellw", "cellh", "gapx", "gapy", "edgepad", "autocrop", "rows", "cols",
  "xnt", "ynt", "sharey", "mxl", "mxr", "myb", "myt", "font", "fsize",
  "letters", "grid", "xlabel", "ylabel", "xoff", "yoff", "lw",
- "memberlw", "memberalpha", "showmembers", "showci", "layout"].forEach(id => {
+ "memberlw", "memberalpha", "showmembers", "membermode", "msize", "layout"].forEach(id => {
   $(id).addEventListener("input", render);
   $(id).addEventListener("change", render);
 });

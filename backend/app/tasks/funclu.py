@@ -136,26 +136,30 @@ def _parameter_tables(model, conditions: list[str]) -> tuple[pd.DataFrame, pd.Da
 
 
 def _render_cluster_profiles(
+    model,
     curve_sample: dict[str, pd.DataFrame],
-    labels: np.ndarray,
-    common_cols: list[str],
-    n_components: int,
+    quasi_dynamic: dict[str, pd.DataFrame],
     conditions: list[str],
 ) -> tuple[str, int]:
-    frames = {
-        name: frame.loc[:, [column for column in common_cols if column in frame.columns]]
-        for name, frame in curve_sample.items()
+    common_cols = list(model.common_cols)
+    curves = {name: curve_sample[name].loc[:, common_cols] for name in conditions}
+    observed = {name: quasi_dynamic[name].loc[:, common_cols] for name in conditions}
+    # The same fitted means as cluster_center_curve_sample.csv in the export.
+    means = {
+        name: model.mean_curves_at(index, curves[name].index)
+        for index, name in enumerate(conditions)
     }
+    labels = np.asarray(model.labels, dtype=int)
     cap = 40
     html = ""
     for _ in range(4):
         panels = funclu_html.build_cluster_panels(
-            frames,
+            curves,
+            observed,
+            means,
             labels,
             common_cols,
-            n_components,
-            show_members=True,
-            show_ci=True,
+            model.n_components,
             max_members=cap,
         )
         html = funclu_html.render(panels, conditions=conditions)
@@ -251,7 +255,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
     ctx.check_cancelled()
     ctx.progress("funclu.stage.charts", 0.92, "funclu.message.charting")
     html, member_cap = _render_cluster_profiles(
-        curve_sample, labels, common_cols, params.n_components, conditions
+        model, curve_sample, quasi_dynamic, conditions
     )
     chart_path = write_text(
         ctx.output_dir / "charts" / "cluster_profiles.html", html
