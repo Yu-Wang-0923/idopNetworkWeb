@@ -28,6 +28,7 @@ class InspectOut(BaseModel):
     kind: str
     conditions: list[str] = Field(default_factory=list)
     members: list[str] = Field(default_factory=list)
+    features: int | None = None
 
 
 class InputRef(BaseModel):

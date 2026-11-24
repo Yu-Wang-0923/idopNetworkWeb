@@ -7,11 +7,13 @@ from pathlib import Path
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..models import Artifact
+from ..file_inspect import curve_feature_count
+from ..models import Artifact, Workspace
 from ..schemas import ArtifactOut
 from ..serializers import artifact_out
 from ..storage import Storage, StorageError, inspect_zip, zip_conditions, zip_members
@@ -41,6 +43,20 @@ def _artifact_path(artifact: Artifact, settings: Settings) -> Path:
     if not path.is_file():
         raise HTTPException(status_code=404, detail={"code": "artifact.file_missing"})
     return path
+
+
+@router.get("", response_model=list[ArtifactOut])
+def list_artifacts(
+    workspace: Workspace = Depends(get_workspace),
+    db: Session = Depends(get_db),
+    semantic_type: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+) -> list[ArtifactOut]:
+    statement = select(Artifact).where(Artifact.workspace_id == workspace.id)
+    if semantic_type:
+        statement = statement.where(Artifact.semantic_type == semantic_type)
+    statement = statement.order_by(Artifact.created_at.desc()).limit(limit)
+    return [artifact_out(item) for item in db.scalars(statement).all()]
 
 
 @router.get("/{artifact_id}", response_model=ArtifactOut)
@@ -122,4 +138,7 @@ def inspect_artifact(
         "kind": artifact.semantic_type,
         "conditions": zip_conditions(names),
         "members": zip_members(names),
+        "features": curve_feature_count(path)
+        if artifact.semantic_type == "curve_fitting_export"
+        else None,
     }

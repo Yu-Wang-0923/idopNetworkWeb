@@ -94,11 +94,12 @@ export interface InspectResult {
   kind: string;
   conditions: string[];
   members: string[];
+  features?: number | null;
 }
 
 export interface CreateRunPayload {
   task_key: string;
-  params: Record<string, unknown>;
+  params: object;
   inputs: Array<{
     role: string;
     ordinal?: number;

@@ -1,0 +1,458 @@
+"""FunClu tasks: EM functional clustering (K) and the BIC scan."""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Literal
+
+import numpy as np
+import pandas as pd
+from pydantic import BaseModel, Field
+
+from app.jobs.context import TaskContext
+from app.jobs.registry import StageSpec, TaskSpec, register
+from app.pure.charts import funclu_html
+from app.pure.funclu import (
+    build_funclu_k_export_zip,
+    common_feature_count,
+    load_curve_fitting_zip,
+    recommend_best_k,
+    save_bic_elbow,
+)
+
+
+class FunCluKParams(BaseModel):
+    n_components: int = Field(default=3, ge=2, le=10000)
+    max_iter: int = Field(default=1000, ge=10, le=2000)
+    tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
+    random_state: int = Field(default=42, ge=0, le=9999)
+
+
+class FunCluBicParams(BaseModel):
+    mode: Literal["scan", "default"] = "scan"
+    k_min: int = Field(default=2, ge=2, le=10000)
+    k_max: int = Field(default=4, ge=2, le=10000)
+    step: int = Field(default=1, ge=1, le=100)
+    max_iter: int = Field(default=1000, ge=10, le=2000)
+    tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
+    random_state: int = Field(default=42, ge=0, le=9999)
+    n_random_starts: int = Field(default=1, ge=1, le=10)
+    aggregation: Literal["median", "mean"] = "median"
+    min_cluster_size: int = Field(default=1, ge=1, le=10000)
+
+
+K_STAGES = (
+    StageSpec("funclu.stage.load", 5),
+    StageSpec("funclu.stage.fit", 75),
+    StageSpec("funclu.stage.export", 10),
+    StageSpec("funclu.stage.charts", 10),
+)
+
+BIC_STAGES = (
+    StageSpec("funclu.stage.load", 5),
+    StageSpec("funclu.stage.bic", 85),
+    StageSpec("funclu.stage.export", 10),
+)
+
+
+def _curve_zip_input(ctx: TaskContext) -> Path:
+    inputs = [item for item in ctx.inputs if item.role == "curve_zip"]
+    if len(inputs) != 1:
+        raise ValueError("Exactly one Curve Fitting export ZIP is required")
+    item = inputs[0]
+    if Path(item.path).suffix.lower() != ".zip":
+        raise ValueError("The FunClu input must be a Curve Fitting export ZIP")
+    return Path(item.path)
+
+
+def _prepare(ctx: TaskContext, path: Path):
+    curve_sample, quasi_dynamic = load_curve_fitting_zip(path.read_bytes())
+    conditions = list(curve_sample)
+    frames = [curve_sample[name] for name in conditions]
+    features = common_feature_count(frames)
+    if features < 2:
+        raise ValueError("FunClu needs at least 2 shared features across conditions")
+    ctx.log(
+        "funclu.message.loaded",
+        conditions=len(conditions),
+        features=features,
+    )
+    return curve_sample, quasi_dynamic, conditions, frames, features
+
+
+def _write_text(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def _finite(value) -> float | None:
+    number = float(value)
+    return number if np.isfinite(number) else None
+
+
+def _parameter_tables(model, conditions: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    mu = model.params_mu.detach().cpu().numpy()
+    cov = model.params_cov.detach().cpu().numpy()
+    mu_rows = [
+        {
+            "cluster": f"M{cluster + 1}",
+            "condition": conditions[condition],
+            "a": float(mu[cluster, condition, 0]),
+            "b": float(mu[cluster, condition, 1]),
+        }
+        for cluster in range(model.n_components)
+        for condition in range(model.n_conditions)
+    ]
+    cov_rows = [
+        {
+            "cluster": f"M{cluster + 1}",
+            "condition": conditions[condition],
+            "phi": float(cov[cluster, condition, 0]),
+            "gamma": float(cov[cluster, condition, 1]),
+        }
+        for cluster in range(model.n_components)
+        for condition in range(model.n_conditions)
+    ]
+    return pd.DataFrame(mu_rows), pd.DataFrame(cov_rows)
+
+
+def _render_cluster_profiles(
+    curve_sample: dict[str, pd.DataFrame],
+    labels: np.ndarray,
+    common_cols: list[str],
+    n_components: int,
+    conditions: list[str],
+) -> tuple[str, int]:
+    frames = {
+        name: frame.loc[:, [column for column in common_cols if column in frame.columns]]
+        for name, frame in curve_sample.items()
+    }
+    cap = 40
+    html = ""
+    for _ in range(4):
+        panels = funclu_html.build_cluster_panels(
+            frames,
+            labels,
+            common_cols,
+            n_components,
+            show_members=True,
+            show_ci=True,
+            max_members=cap,
+        )
+        html = funclu_html.render(panels, conditions=conditions)
+        if len(html.encode("utf-8")) <= 2_000_000 or cap <= 5:
+            return html, cap
+        cap = max(5, cap // 2)
+    return html, cap
+
+
+def _run_funclu_k(ctx: TaskContext) -> None:
+    params = FunCluKParams.model_validate(ctx.params)
+    path = _curve_zip_input(ctx)
+    ctx.check_cancelled()
+    ctx.progress("funclu.stage.load", 0.03, "funclu.message.loading", name=path.name)
+    curve_sample, quasi_dynamic, conditions, frames, features = _prepare(ctx, path)
+    if params.n_components > features:
+        raise ValueError(
+            f"n_components={params.n_components} exceeds the {features} shared features"
+        )
+
+    from idopnetwork.clustering.funclu import FunClu
+    from idopnetwork.curve_fitting import get_power_function_params
+
+    ctx.check_cancelled()
+    ctx.progress(
+        "funclu.stage.fit",
+        0.10,
+        "funclu.message.fitting",
+        k=params.n_components,
+    )
+    model = FunClu(
+        n_components=params.n_components,
+        max_iter=params.max_iter,
+        tol=params.tol,
+        random_state=params.random_state,
+    )
+    model.fit(
+        frames,
+        parameter_data=[
+            get_power_function_params(quasi_dynamic[name]) for name in conditions
+        ],
+    )
+    ctx.check_cancelled()
+
+    labels = model.labels.detach().cpu().numpy().astype(int)
+    common_cols = list(model.common_cols)
+    ctx.progress("funclu.stage.export", 0.80, "funclu.message.exporting")
+    export = build_funclu_k_export_zip(
+        model=model,
+        cond_names=conditions,
+        curve_sample_dict=curve_sample,
+        quasi_dynamic_dict=quasi_dynamic,
+    )
+    export_path = ctx.output_dir / "funclu_k_export.zip"
+    export_path.write_bytes(export)
+    ctx.add_artifact(
+        export_path,
+        "funclu_k_export.zip",
+        "funclu_k_export",
+        kind="zip",
+        mime="application/zip",
+        is_primary=True,
+    )
+
+    labels_df = pd.DataFrame(
+        {
+            "feature": common_cols,
+            "cluster_id": labels + 1,
+            "cluster": [f"M{k + 1}" for k in labels],
+        }
+    )
+    sizes_df = (
+        labels_df.groupby(["cluster_id", "cluster"], as_index=False)
+        .size()
+        .rename(columns={"size": "n_features"})
+        .sort_values("cluster_id")
+    )
+    mu_df, cov_df = _parameter_tables(model, conditions)
+    for frame, name in (
+        (labels_df, "labels.csv"),
+        (sizes_df, "cluster_sizes.csv"),
+        (mu_df, "mu_params.csv"),
+        (cov_df, "cov_params.csv"),
+    ):
+        artifact_path = _write_text(
+            ctx.output_dir / "tables" / name, frame.to_csv(index=False)
+        )
+        ctx.add_artifact(
+            artifact_path,
+            f"tables/{name}",
+            "funclu_table",
+            kind="csv",
+            mime="text/csv",
+        )
+
+    ctx.check_cancelled()
+    ctx.progress("funclu.stage.charts", 0.92, "funclu.message.charting")
+    html, member_cap = _render_cluster_profiles(
+        curve_sample, labels, common_cols, params.n_components, conditions
+    )
+    chart_path = _write_text(
+        ctx.output_dir / "charts" / "cluster_profiles.html", html
+    )
+    ctx.add_artifact(
+        chart_path,
+        "charts/cluster_profiles.html",
+        "funclu_cluster_profiles_html",
+        kind="html",
+        mime="text/html",
+    )
+
+    weights = model.weights.detach().cpu().numpy()
+    summary = {
+        "task": "funclu.k",
+        "conditions": conditions,
+        "n_conditions": len(conditions),
+        "n_features": int(model.n_features),
+        "n_components": int(model.n_components),
+        "converged": bool(model.converged),
+        "n_iter_run": int(model.n_iter_run),
+        "max_iter": int(params.max_iter),
+        "tol": float(params.tol),
+        "random_state": int(params.random_state),
+        "log_likelihood": float(model.log_likelihood),
+        "bic": float(model.bic),
+        "cluster_sizes": {
+            f"M{index + 1}": int(size)
+            for index, size in enumerate(np.bincount(labels, minlength=params.n_components))
+        },
+        "cluster_weights": {
+            f"M{index + 1}": float(weight)
+            for index, weight in enumerate(weights)
+        },
+        "chart_member_cap": member_cap,
+    }
+    summary_path = _write_text(
+        ctx.output_dir / "funclu_k_summary.json",
+        json.dumps(summary, ensure_ascii=False, indent=2),
+    )
+    ctx.add_artifact(
+        summary_path,
+        "funclu_k_summary.json",
+        "funclu_k_summary",
+        kind="json",
+        mime="application/json",
+    )
+    ctx.progress(
+        "funclu.stage.charts",
+        1.0,
+        "funclu.message.done",
+        k=params.n_components,
+        clusters=params.n_components,
+    )
+
+
+def _run_funclu_bic(ctx: TaskContext) -> None:
+    params = FunCluBicParams.model_validate(ctx.params)
+    path = _curve_zip_input(ctx)
+    ctx.check_cancelled()
+    ctx.progress("funclu.stage.load", 0.02, "funclu.message.loading", name=path.name)
+    curve_sample, quasi_dynamic, conditions, frames, features = _prepare(ctx, path)
+
+    if params.mode == "default":
+        k_min = 2
+        k_max = min(features, max(2, int(np.sqrt(features))))
+        step = 1
+    else:
+        k_min = params.k_min
+        k_max = min(params.k_max, features)
+        step = params.step
+    if k_max < k_min:
+        raise ValueError(
+            f"k_max={k_max} is below k_min={k_min} for {features} shared features"
+        )
+    ks = list(range(k_min, k_max + 1, step))
+
+    from idopnetwork.clustering.funclu import compute_bic_scores
+    from idopnetwork.curve_fitting import get_power_function_params
+
+    parameters = [
+        get_power_function_params(quasi_dynamic[name]) for name in conditions
+    ]
+
+    def on_progress(index: int, total: int) -> None:
+        ctx.check_cancelled()
+        ctx.progress(
+            "funclu.stage.bic",
+            0.05 + 0.80 * index / max(1, total),
+            "funclu.message.bic",
+            k=ks[index - 1],
+            index=index,
+            total=total,
+        )
+
+    ctx.check_cancelled()
+    bic_df = compute_bic_scores(
+        data=frames,
+        parameter_data=parameters,
+        k_min=k_min,
+        k_max=k_max,
+        step=step,
+        max_iter=params.max_iter,
+        tol=params.tol,
+        random_state=params.random_state,
+        n_random_starts=params.n_random_starts,
+        aggregation=params.aggregation,
+        min_cluster_size=params.min_cluster_size,
+        progress_callback=on_progress,
+    )
+    ctx.check_cancelled()
+
+    best_k, raw_best, candidates = recommend_best_k(bic_df, mode=params.mode)
+    ctx.progress("funclu.stage.export", 0.90, "funclu.message.exporting")
+    csv_path = _write_text(
+        ctx.output_dir / "funclu_bic_results.csv", bic_df.to_csv(index=False)
+    )
+    ctx.add_artifact(
+        csv_path,
+        "funclu_bic_results.csv",
+        "funclu_bic_results",
+        kind="csv",
+        mime="text/csv",
+        is_primary=True,
+    )
+    elbow_path = save_bic_elbow(
+        bic_df,
+        ctx.output_dir / "charts" / "bic_elbow.png",
+        best_k=best_k,
+        candidate_ks=candidates or None,
+        auto_select_best=params.mode != "default",
+    )
+    ctx.add_artifact(
+        elbow_path,
+        "charts/bic_elbow.png",
+        "funclu_bic_elbow",
+        kind="png",
+        mime="image/png",
+    )
+    best_row = None
+    if best_k is not None:
+        match = bic_df[bic_df["K"].astype(int) == best_k]
+        if not match.empty:
+            row = match.iloc[0]
+            best_row = {
+                "K": int(row["K"]),
+                "BIC": float(row["BIC"]),
+                "SI": _finite(row["SI"]),
+                "converged_rate": _finite(row["converged_rate"]),
+                "passes_min_cluster_size": bool(row["passes_min_cluster_size"]),
+            }
+    summary = {
+        "task": "funclu.bic",
+        "conditions": conditions,
+        "n_conditions": len(conditions),
+        "n_features": features,
+        "mode": params.mode,
+        "k_min": k_min,
+        "k_max": k_max,
+        "step": step,
+        "k_values": ks,
+        "recommended_k": best_k,
+        "raw_best_k": raw_best,
+        "checkmark_candidates": candidates,
+        "best_row": best_row,
+        "rows": int(len(bic_df)),
+        "params": params.model_dump(),
+    }
+    summary_path = _write_text(
+        ctx.output_dir / "funclu_bic_summary.json",
+        json.dumps(summary, ensure_ascii=False, indent=2),
+    )
+    ctx.add_artifact(
+        summary_path,
+        "funclu_bic_summary.json",
+        "funclu_bic_summary",
+        kind="json",
+        mime="application/json",
+    )
+    ctx.progress(
+        "funclu.stage.export",
+        1.0,
+        "funclu.message.bic_done",
+        best=best_k if best_k is not None else "—",
+        total=len(ks),
+    )
+
+
+register(
+    TaskSpec(
+        key="funclu.k",
+        module="funclu",
+        title_key="tasks.funclu_k.title",
+        description_key="tasks.funclu_k.description",
+        params_model=FunCluKParams,
+        input_roles=("curve_zip",),
+        stages=K_STAGES,
+        maturity="stable",
+        enabled=True,
+        timeout_s=3600,
+        run=_run_funclu_k,
+    )
+)
+
+register(
+    TaskSpec(
+        key="funclu.bic",
+        module="funclu",
+        title_key="tasks.funclu_bic.title",
+        description_key="tasks.funclu_bic.description",
+        params_model=FunCluBicParams,
+        input_roles=("curve_zip",),
+        stages=BIC_STAGES,
+        maturity="stable",
+        enabled=True,
+        timeout_s=7200,
+        run=_run_funclu_bic,
+    )
+)

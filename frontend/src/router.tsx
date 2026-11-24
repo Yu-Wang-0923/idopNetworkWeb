@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppShell from "./components/AppShell";
 import CurveFittingPage from "./pages/CurveFittingPage";
 import DemoPage from "./pages/DemoPage";
+import FunCluPage from "./pages/FunCluPage";
 import HomePage from "./pages/HomePage";
 import ModulePlaceholder from "./pages/ModulePlaceholder";
 import RunDetailPage from "./pages/RunDetailPage";
@@ -16,10 +17,7 @@ export function AppRouter() {
         <Route path="runs/:runId" element={<RunDetailPage />} />
         <Route path="demo" element={<DemoPage />} />
         <Route path="modules/curve-fitting" element={<CurveFittingPage />} />
-        <Route
-          path="modules/funclu"
-          element={<ModulePlaceholder moduleKey="funclu" phase={2} />}
-        />
+        <Route path="modules/funclu" element={<FunCluPage />} />
         <Route
           path="modules/netrecon"
           element={<ModulePlaceholder moduleKey="netrecon" phase={3} />}

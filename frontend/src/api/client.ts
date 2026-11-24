@@ -1,4 +1,5 @@
 import type {
+  Artifact,
   CreateRunPayload,
   Dataset,
   InspectResult,
@@ -82,4 +83,13 @@ export const api = {
 
   artifactUrl: (artifactId: string, mode: "content" | "download" = "content") =>
     `/api/artifacts/${artifactId}/${mode}`,
+  listArtifacts: (semanticType?: string) => {
+    const query = new URLSearchParams({ limit: "100" });
+    if (semanticType) {
+      query.set("semantic_type", semanticType);
+    }
+    return request<Artifact[]>(`/artifacts?${query.toString()}`);
+  },
+  inspectArtifact: (artifactId: string) =>
+    request<InspectResult>(`/artifacts/${artifactId}/inspect`),
 };

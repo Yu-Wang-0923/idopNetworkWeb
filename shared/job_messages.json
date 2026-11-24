@@ -18,5 +18,18 @@
   "curve_fitting.message.exporting": {"zh": "生成导出 ZIP", "en": "Building the export ZIP"},
   "curve_fitting.message.charting": {"zh": "绘图：{{name}}", "en": "Rendering figures: {{name}}"},
   "curve_fitting.message.file_failed": {"zh": "文件失败：{{name}}", "en": "File failed: {{name}}"},
-  "curve_fitting.message.done": {"zh": "曲线拟合完成，共 {{files}} 个文件", "en": "Curve fitting finished for {{files}} files"}
+  "curve_fitting.message.done": {"zh": "曲线拟合完成，共 {{files}} 个文件", "en": "Curve fitting finished for {{files}} files"},
+  "funclu.stage.load": {"zh": "读取输入", "en": "Loading input"},
+  "funclu.stage.fit": {"zh": "EM 聚类", "en": "Fitting clusters"},
+  "funclu.stage.bic": {"zh": "BIC 扫描", "en": "Scanning BIC"},
+  "funclu.stage.export": {"zh": "导出结果", "en": "Exporting results"},
+  "funclu.stage.charts": {"zh": "生成图表", "en": "Rendering figures"},
+  "funclu.message.loading": {"zh": "读取 {{name}}", "en": "Reading {{name}}"},
+  "funclu.message.loaded": {"zh": "已载入 {{conditions}} 个条件、{{features}} 个共享特征", "en": "Loaded {{conditions}} conditions and {{features}} shared features"},
+  "funclu.message.fitting": {"zh": "拟合 K = {{k}}", "en": "Fitting K = {{k}}"},
+  "funclu.message.exporting": {"zh": "生成导出文件", "en": "Building export files"},
+  "funclu.message.charting": {"zh": "生成簇轮廓图", "en": "Rendering cluster profiles"},
+  "funclu.message.bic": {"zh": "拟合 K = {{k}}（{{index}}/{{total}}）", "en": "Fitting K = {{k}} ({{index}}/{{total}})"},
+  "funclu.message.done": {"zh": "FunClu 完成，K = {{k}}", "en": "FunClu finished with K = {{k}}"},
+  "funclu.message.bic_done": {"zh": "BIC 扫描完成（{{total}} 个 K），推荐 K = {{best}}", "en": "BIC scan finished ({{total}} K values); recommended K = {{best}}"}
 }

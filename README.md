@@ -57,7 +57,8 @@ Open http://localhost:5173.
 
 - Phase 0: platform skeleton, anonymous workspace, job queue, demo task, frontend shell.
 - Phase 1: Curve Fitting — quasi-dynamic power fitting and dynamic SWT denoising, with the export ZIP, publication-grade HTML figures (per-lead ECG figures in the upstream full-record/zoom style), and table downloads.
-- Later phases: FunClu, NetRecon, NetAnal, and platform hardening.
+- Phase 2: FunClu — EM functional clustering with a FunClu-K export ZIP and cluster-profile HTML, plus a BIC scan with elbow plot that can be cancelled at K boundaries.
+- Later phases: NetRecon, NetAnal, and platform hardening.
 
 ## License
 
