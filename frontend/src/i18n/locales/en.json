@@ -153,7 +153,7 @@
   "tasks.funclu_bic.title": "FunClu BIC scan",
   "tasks.funclu_bic.description": "Scan BIC across a K range and export the score table and elbow plot to choose the cluster count.",
   "funclu.title": "Functional Clustering (FunClu)",
-  "funclu.desc": "Cluster shared features across conditions with an EM Gaussian mixture, using the curve_sample and quasi_dynamic tables from a Curve Fitting export.",
+  "funclu.desc": "Cluster shared features across conditions with an EM Gaussian mixture fitted to the observations (quasi_dynamic) of a Curve Fitting export. The sampled power curves (curve_sample) are not clustered; they are only used for the export and the cluster profile figure.",
   "funclu.input.title": "Input data",
   "funclu.input.upload": "New upload",
   "funclu.input.history": "Existing artifacts",
@@ -175,7 +175,7 @@
   "funclu.k.tol": "Tolerance",
   "funclu.k.randomState": "Random seed",
   "funclu.k.submit": "Run FunClu-K",
-  "funclu.k.tip": "The engine is Fast-Funclu with a power mean on the supplied scale and additive SAD(1) residuals. S1 covariance and log_c_beta initialization are the defaults; non-positive responses fall back to KMeans. The FunClu-K ZIP feeds multi-layer network reconstruction.",
+  "funclu.k.tip": "The engine is Fast-Funclu with a power mean on the supplied scale and additive SAD(1) residuals, fitted to the observations (quasi_dynamic). S1 covariance and log_c_beta initialization are the defaults; non-positive responses fall back to KMeans. The FunClu-K ZIP feeds multi-layer network reconstruction.",
   "funclu.initParams": "Initialization",
   "funclu.init.log_c_beta": "log(c)+β regression (default)",
   "funclu.init.kmeans": "KMeans (curve profiles)",
@@ -196,5 +196,5 @@
   "funclu.bic.randomState": "Random seed",
   "funclu.bic.minClusterSize": "Minimum cluster size",
   "funclu.bic.submit": "Run BIC scan",
-  "funclu.bic.tip": "The engine is Fast-Funclu with a power mean on the supplied scale and additive SAD(1) residuals. Scans the joint grid of K and the selected covariance structures (S1 by default; S1–S4 can be selected); each candidate keeps the highest-likelihood run over n_init starts. The recommended model is the lowest BIC among candidates meeting the minimum module size, and the table reports AIC, ΔBIC, selected and the structure. A running scan can be cancelled at each K boundary."
+  "funclu.bic.tip": "The engine is Fast-Funclu with a power mean on the supplied scale and additive SAD(1) residuals, fitted to the observations (quasi_dynamic). Scans the joint grid of K and the selected covariance structures (S1 by default; S1–S4 can be selected); each candidate keeps the highest-likelihood run over n_init starts. The recommended model is the lowest BIC among candidates meeting the minimum module size, and the table reports AIC, ΔBIC, selected and the structure. A running scan can be cancelled at each K boundary."
 }

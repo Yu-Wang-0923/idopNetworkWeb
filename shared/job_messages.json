@@ -25,7 +25,7 @@
   "funclu.stage.export": {"zh": "导出结果", "en": "Exporting results"},
   "funclu.stage.charts": {"zh": "生成图表", "en": "Rendering figures"},
   "funclu.message.loading": {"zh": "读取 {{name}}", "en": "Reading {{name}}"},
-  "funclu.message.loaded": {"zh": "已载入 {{conditions}} 个条件、{{features}} 个共享特征", "en": "Loaded {{conditions}} conditions and {{features}} shared features"},
+  "funclu.message.loaded": {"zh": "已载入 {{conditions}} 个条件、{{features}} 个共享特征的观测值（quasi_dynamic）", "en": "Loaded the observations (quasi_dynamic) of {{features}} shared features in {{conditions}} conditions"},
   "funclu.message.fitting": {"zh": "拟合 K = {{k}}", "en": "Fitting K = {{k}}"},
   "funclu.message.exporting": {"zh": "生成导出文件", "en": "Building export files"},
   "funclu.message.charting": {"zh": "生成簇轮廓图", "en": "Rendering cluster profiles"},

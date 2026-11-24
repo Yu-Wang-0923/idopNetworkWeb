@@ -2,8 +2,9 @@
 
 The estimator vendored from ``fast-funclu`` (author-provided, pinned at
 583cebbeb8416678f06d979e03b7461701d1c74d) fits a linear component mean in
-log-expression space.  idopNetwork Web clusters Curve Fitting exports directly
-on their supplied scale, so this module overrides the mean with
+log-expression space.  idopNetwork Web clusters the observed ``quasi_dynamic``
+tables of a Curve Fitting export (never the sampled power curves) on their
+supplied scale, so this module overrides the mean with
 ``exp(alpha + beta * z)`` (a power law in tau) and keeps the SAD(1) additive
 residuals on that raw scale.  The S1-S4 covariance sharing, E-step, BIC
 parameter counts and EM loop remain those of Fast-Funclu.
@@ -422,8 +423,11 @@ class PowerFunClu:
         self.covariance_model = model.covariance_model
         self.init_params_used = str(model.init_params_used_)
         self.init_fallback_reason = str(model.init_fallback_reason_)
-        self._condition_names = list(model.condition_names_)
-        self._mean_curves = model.mean_curves_
+        # Fast-Funclu's z is the per-condition standardized log(tau).
+        self._coordinates = []
+        for frame in data:
+            u = np.log(np.asarray(frame.index, dtype=float))
+            self._coordinates.append((float(u.mean()), float(u.std(ddof=0))))
         return self
 
     @staticmethod
@@ -441,9 +445,11 @@ class PowerFunClu:
             converted[:, index, 1] = b
         return converted
 
-    def get_cluster_curves(self, condition_idx=0):
-        frame = self._mean_curves[self._condition_names[condition_idx]]
-        return frame.index.to_numpy(float), frame.to_numpy(float).T
+    def mean_curves_at(self, condition_idx: int, times) -> np.ndarray:
+        """Cluster mean curves of one condition at quasi-times ``times`` (K x n)."""
+        center, spread = self._coordinates[condition_idx]
+        z = (np.log(np.asarray(times, dtype=float)) - center) / spread
+        return self.model_._mean_block(z, self.model_.params_mu_, condition_idx)
 
     def covariance_spec(self) -> dict[str, Any]:
         spec = dict(self.model_.covariance_spec())

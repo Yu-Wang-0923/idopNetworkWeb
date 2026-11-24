@@ -4,6 +4,7 @@ import io
 import json
 import zipfile
 
+import numpy as np
 import pandas as pd
 
 from app.job_runner import execute_run
@@ -105,8 +106,25 @@ def test_funclu_k_end_to_end(client):
         labels = pd.read_csv(
             io.BytesIO(archive.read("labels.csv")), dtype={"feature": str}
         )
+        centers = pd.read_csv(
+            io.BytesIO(
+                archive.read("cluster_centers/alpha.csv/cluster_center_curve_sample.csv")
+            ),
+            index_col=0,
+        )
+        observed_centers = pd.read_csv(
+            io.BytesIO(
+                archive.read("cluster_centers/alpha.csv/cluster_center_quasi_dynamic.csv")
+            ),
+            index_col=0,
+        )
     assert len(labels) == 4
     assert set(labels["cluster_id"]) == {1, 2}
+    # Fitted cluster means sit on the 12-point curve_sample grid; the observed
+    # member means keep the 8 samples.
+    assert list(centers.columns) == ["M1", "M2"]
+    assert len(centers) == 12 and np.isfinite(centers.to_numpy()).all()
+    assert len(observed_centers) == 8
 
     chart = artifact(detail, "charts/cluster_profiles.html")
     content = client.get(f"/api/artifacts/{chart['id']}/content")
@@ -121,6 +139,47 @@ def test_funclu_k_end_to_end(client):
     )
     assert payload["n_components"] == 2
     assert set(payload["cluster_sizes"]) == {"M1", "M2"}
+    assert payload["input_table"] == "quasi_dynamic"
+    assert payload["n_points"] == {"alpha.csv": 8, "beta.csv": 8}
+
+
+def test_funclu_clusters_observations_not_sampled_curves(client, monkeypatch):
+    from app.pure.fast_funclu_power import PowerFunClu
+    from app.pure.funclu import load_curve_fitting_zip
+
+    seen: list[list[pd.DataFrame]] = []
+    original_fit = PowerFunClu.fit
+
+    def spy_fit(self, data, **kwargs):
+        seen.append([frame.copy() for frame in data])
+        return original_fit(self, data, **kwargs)
+
+    monkeypatch.setattr(PowerFunClu, "fit", spy_fit)
+    content = curve_zip_bytes()
+    dataset = upload_zip(client, content)
+    run = create_funclu_run(
+        client, "funclu.k", {"n_components": 2, "max_iter": 200}, dataset
+    )
+    assert execute_run(run["id"]) == 0
+
+    curve, quasi = load_curve_fitting_zip(content)
+    (frames,) = seen
+    assert len(frames) == len(quasi)
+    for frame, name in zip(frames, quasi):
+        pd.testing.assert_frame_equal(frame, quasi[name].loc[:, frame.columns])
+        assert len(frame) != len(curve[name])
+
+
+def test_mean_curves_at_matches_the_fitted_means():
+    from app.pure.fast_funclu_power import PowerFunClu
+    from app.pure.funclu import load_curve_fitting_zip
+
+    _curve, quasi = load_curve_fitting_zip(curve_zip_bytes())
+    frames = list(quasi.values())
+    model = PowerFunClu(n_components=2, max_iter=200).fit(frames)
+    for index, frame in enumerate(frames):
+        expected = model.model_.mean_curves_[str(index)].to_numpy().T
+        np.testing.assert_allclose(model.mean_curves_at(index, frame.index), expected)
 
 
 def test_funclu_bic_end_to_end(client):
@@ -245,10 +304,10 @@ def test_funclu_k_supports_shared_covariance(client):
 def test_scan_bic_can_select_a_single_module():
     from app.pure.funclu import load_curve_fitting_zip, scan_bic
 
-    curve, _quasi = load_curve_fitting_zip(curve_zip_bytes())
-    names = list(curve)
+    _curve, quasi = load_curve_fitting_zip(curve_zip_bytes())
+    names = list(quasi)
     table = scan_bic(
-        [curve[name] for name in names],
+        [quasi[name] for name in names],
         k_min=1,
         k_max=2,
         step=1,

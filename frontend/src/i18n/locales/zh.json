@@ -153,7 +153,7 @@
   "tasks.funclu_bic.title": "FunClu BIC 扫描",
   "tasks.funclu_bic.description": "在 K 范围内扫描 BIC，输出结果表与肘部图，帮助选择簇数。",
   "funclu.title": "功能聚类 (FunClu)",
-  "funclu.desc": "使用曲线拟合导出的 curve_sample 与 quasi_dynamic 表，对多个条件的共享特征进行 EM 功能聚类。",
+  "funclu.desc": "对曲线拟合导出中各条件的观测值（quasi_dynamic）做 EM 功能聚类。幂律采样曲线（curve_sample）不参与聚类，只用于导出和簇轮廓图。",
   "funclu.input.title": "输入数据",
   "funclu.input.upload": "新上传 ZIP",
   "funclu.input.history": "历史产物",
@@ -175,7 +175,7 @@
   "funclu.k.tol": "收敛阈值",
   "funclu.k.randomState": "随机种子",
   "funclu.k.submit": "运行 FunClu-K",
-  "funclu.k.tip": "引擎为 Fast-Funclu（原始尺度幂律均值、加性 SAD(1) 残差）；默认 S1 协方差结构与 log_c_beta 初始化（响应含非正值时自动回退 KMeans）。完成后可下载 FunClu-K ZIP 供多层网络重建使用。",
+  "funclu.k.tip": "引擎为 Fast-Funclu（原始尺度幂律均值、加性 SAD(1) 残差），拟合对象是观测值 quasi_dynamic；默认 S1 协方差结构与 log_c_beta 初始化（响应含非正值时自动回退 KMeans）。完成后可下载 FunClu-K ZIP 供多层网络重建使用。",
   "funclu.initParams": "初始化方法",
   "funclu.init.log_c_beta": "log(c)+β 回归（默认）",
   "funclu.init.kmeans": "KMeans（曲线形状）",
@@ -196,5 +196,5 @@
   "funclu.bic.randomState": "随机种子",
   "funclu.bic.minClusterSize": "最小簇大小",
   "funclu.bic.submit": "运行 BIC 扫描",
-  "funclu.bic.tip": "引擎为 Fast-Funclu（原始尺度幂律均值、加性 SAD(1) 残差）。在 K 与所选协方差结构（默认 S1，可多选 S1–S4）的联合网格上，每个候选用 n_init 个随机起点并保留似然最优的一次；推荐最小簇大小约束下 BIC 最低的模型，结果表含 AIC、ΔBIC、selected 与结构列；运行中可在 K 结束时取消。"
+  "funclu.bic.tip": "引擎为 Fast-Funclu（原始尺度幂律均值、加性 SAD(1) 残差），拟合对象是观测值 quasi_dynamic。在 K 与所选协方差结构（默认 S1，可多选 S1–S4）的联合网格上，每个候选用 n_init 个随机起点并保留似然最优的一次；推荐最小簇大小约束下 BIC 最低的模型，结果表含 AIC、ΔBIC、selected 与结构列；运行中可在 K 结束时取消。"
 }

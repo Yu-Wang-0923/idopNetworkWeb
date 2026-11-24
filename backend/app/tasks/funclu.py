@@ -14,8 +14,8 @@ from app.jobs.registry import StageSpec, TaskSpec, register
 from app.pure.charts import funclu_html
 from app.pure.funclu import (
     build_funclu_k_export_zip,
-    finite_condition_frames,
     load_curve_fitting_zip,
+    observed_condition_frames,
     save_bic_comparison,
     scan_bic,
 )
@@ -75,8 +75,8 @@ def _curve_zip_input(ctx: TaskContext) -> Path:
 def _prepare(ctx: TaskContext, path: Path):
     curve_sample, quasi_dynamic = load_curve_fitting_zip(path.read_bytes())
     conditions = list(curve_sample)
-    frames, valid_columns = finite_condition_frames(
-        [curve_sample[name] for name in conditions]
+    frames, valid_columns = observed_condition_frames(
+        quasi_dynamic, curve_sample, conditions
     )
     features = len(valid_columns)
     if features < 2:
@@ -269,6 +269,8 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         "task": "funclu.k",
         "conditions": conditions,
         "n_conditions": len(conditions),
+        "input_table": "quasi_dynamic",
+        "n_points": {name: int(len(frame)) for name, frame in zip(conditions, frames)},
         "n_features": int(model.n_features),
         "n_components": int(model.n_components),
         "covariance_model": params.covariance_model,
@@ -421,6 +423,8 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "task": "funclu.bic",
         "conditions": conditions,
         "n_conditions": len(conditions),
+        "input_table": "quasi_dynamic",
+        "n_points": {name: int(len(frame)) for name, frame in zip(conditions, frames)},
         "n_features": features,
         "k_min": k_min,
         "k_max": k_max,

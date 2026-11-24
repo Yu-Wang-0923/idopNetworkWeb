@@ -87,6 +87,29 @@ def finite_condition_frames(
     return [frame.loc[:, valid] for frame in frames], valid
 
 
+def observed_condition_frames(
+    quasi_dynamic: dict[str, pd.DataFrame],
+    curve_sample: dict[str, pd.DataFrame],
+    conditions: list[str],
+) -> tuple[list[pd.DataFrame], list[str]]:
+    """FunClu input: the observed quasi_dynamic tables, never the sampled power curves.
+
+    A feature is kept only when its observations and its fitted curve are finite
+    in every condition, because the K export and the figure carry both tables.
+    """
+    frames, observed = finite_condition_frames(
+        [quasi_dynamic[name] for name in conditions]
+    )
+    _, fitted = finite_condition_frames([curve_sample[name] for name in conditions])
+    fitted_set = set(fitted)
+    valid = [column for column in observed if column in fitted_set]
+    if not valid:
+        raise ValueError(
+            "No shared feature has finite observations and a finite fitted curve"
+        )
+    return [frame.loc[:, valid] for frame in frames], valid
+
+
 def build_funclu_k_export_zip(
     *,
     model: Any,
@@ -94,14 +117,18 @@ def build_funclu_k_export_zip(
     curve_sample_dict: dict[str, pd.DataFrame],
     quasi_dynamic_dict: dict[str, pd.DataFrame],
 ) -> bytes:
-    """Build the FunClu-K ZIP consumed by multi-layer NetRecon."""
+    """Build the FunClu-K ZIP consumed by multi-layer NetRecon.
+
+    Cluster centers are the fitted cluster means evaluated on each condition's
+    curve_sample grid, plus the mean of the members' observations.
+    """
     if model.labels is None or model.common_cols is None:
         raise ValueError("FunClu-K result is incomplete: missing labels/common columns.")
 
     labels_np = np.asarray(model.labels, dtype=int)
     common_cols = list(model.common_cols)
     if len(labels_np) != len(common_cols):
-        raise ValueError("FunClu-K labels do not match common curve_sample columns.")
+        raise ValueError("FunClu-K labels do not match the clustered feature columns.")
     missing_quasi = [
         name for name in cond_names if name not in quasi_dynamic_dict
     ]
@@ -148,10 +175,9 @@ def build_funclu_k_export_zip(
                     quasi_dynamic.loc[:, member_cols].to_csv(index=True),
                 )
 
-            center_times, center_curves = model.get_cluster_curves(cond_idx)
             center_df = pd.DataFrame(
-                center_curves.T,
-                index=center_times,
+                model.mean_curves_at(cond_idx, curve_sample.index).T,
+                index=curve_sample.index,
                 columns=[f"M{k + 1}" for k in range(model.n_components)],
             )
             center_df.index.name = curve_sample.index.name or "time"
