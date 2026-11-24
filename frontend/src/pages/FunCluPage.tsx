@@ -41,18 +41,27 @@ interface KValues {
   max_iter: number;
   tol: number;
   random_state: number;
+  covariance_model: string;
 }
 
 interface BicValues {
   k_min: number;
   k_max: number;
   step: number;
+  covariance_models: string[];
   n_init: number;
   max_iter: number;
   tol: number;
   random_state: number;
   min_cluster_size: number;
 }
+
+const covarianceOptions = (t: (key: string) => string) => [
+  { value: "S1", label: t("funclu.covariance.S1") },
+  { value: "S2", label: t("funclu.covariance.S2") },
+  { value: "S3", label: t("funclu.covariance.S3") },
+  { value: "S4", label: t("funclu.covariance.S4") },
+];
 
 function inputPayload(input: SelectedInput) {
   return input.source === "dataset"
@@ -109,6 +118,7 @@ function KForm({ input }: { input: SelectedInput | null }) {
         max_iter: 1000,
         tol: 0.0001,
         random_state: 42,
+        covariance_model: "S4",
       }}
       onFinish={submit}
     >
@@ -124,6 +134,11 @@ function KForm({ input }: { input: SelectedInput | null }) {
               max={input?.features ?? 10000}
               style={{ width: "100%" }}
             />
+          </Form.Item>
+        </Col>
+        <Col span={12}>
+          <Form.Item label={t("funclu.covarianceModel")} name="covariance_model">
+            <Select options={covarianceOptions(t)} />
           </Form.Item>
         </Col>
         <Col span={12}>
@@ -210,6 +225,7 @@ function BicForm({ input }: { input: SelectedInput | null }) {
         k_min: 2,
         k_max: 20,
         step: 1,
+        covariance_models: ["S1", "S2", "S3", "S4"],
         n_init: 5,
         max_iter: 1000,
         tol: 0.0001,
@@ -232,6 +248,18 @@ function BicForm({ input }: { input: SelectedInput | null }) {
         <Col span={8}>
           <Form.Item label={t("funclu.bic.step")} name="step">
             <InputNumber min={1} max={100} style={{ width: "100%" }} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={12}>
+        <Col span={24}>
+          <Form.Item
+            label={t("funclu.bic.covarianceModels")}
+            name="covariance_models"
+            rules={[{ required: true }]}
+          >
+            <Select mode="multiple" options={covarianceOptions(t)} />
           </Form.Item>
         </Col>
       </Row>

@@ -4,6 +4,7 @@ import io
 import json
 import zipfile
 
+import numpy as np
 import pandas as pd
 
 from app.job_runner import execute_run
@@ -132,6 +133,7 @@ def test_funclu_bic_end_to_end(client):
             "k_min": 2,
             "k_max": 3,
             "step": 1,
+            "covariance_models": ["S1", "S4"],
             "n_init": 1,
             "max_iter": 200,
             "tol": 1e-4,
@@ -147,7 +149,7 @@ def test_funclu_bic_end_to_end(client):
     names = {item["logical_name"] for item in detail["artifacts"]}
     assert {
         "funclu_bic_results.csv",
-        "charts/bic_elbow.png",
+        "charts/bic_comparison.png",
         "funclu_bic_summary.json",
     } <= names
 
@@ -155,11 +157,13 @@ def test_funclu_bic_end_to_end(client):
     download = client.get(f"/api/artifacts/{csv_artifact['id']}/download")
     frame = pd.read_csv(io.BytesIO(download.content))
     assert set(frame["K"]) == {2, 3}
+    assert set(frame["covariance_model"]) == {"S1", "S4"}
+    assert len(frame) == 4
     for column in (
         "BIC",
         "AIC",
         "n_parameters",
-        "covariance_model",
+        "n_covariance_parameters",
         "eligible",
         "delta_bic",
         "selected",
@@ -170,8 +174,8 @@ def test_funclu_bic_end_to_end(client):
     assert selected["delta_bic"] == 0
     assert selected["BIC"] == frame["BIC"].min()
 
-    elbow = artifact(detail, "charts/bic_elbow.png")
-    png = client.get(f"/api/artifacts/{elbow['id']}/content")
+    comparison = artifact(detail, "charts/bic_comparison.png")
+    png = client.get(f"/api/artifacts/{comparison['id']}/content")
     assert png.status_code == 200
     assert png.headers["content-type"].startswith("image/png")
     assert png.content.startswith(b"\x89PNG")
@@ -181,9 +185,65 @@ def test_funclu_bic_end_to_end(client):
         client.get(f"/api/artifacts/{summary['id']}/download").content
     )
     assert payload["k_values"] == [2, 3]
+    assert payload["covariance_models"] == ["S1", "S4"]
     assert payload["recommended_k"] == int(selected["K"])
-    assert payload["eligible_count"] == 2
+    assert payload["selected_model"] == str(selected["covariance_model"])
+    assert payload["eligible_count"] == 4
     assert payload["best_row"]["AIC"] is not None
+    assert payload["best_row"]["covariance_model"] == payload["selected_model"]
+
+
+def test_funclu_k_supports_shared_covariance(client):
+    dataset = upload_zip(client, curve_zip_bytes())
+    run = create_funclu_run(
+        client,
+        "funclu.k",
+        {
+            "n_components": 2,
+            "max_iter": 200,
+            "tol": 1e-4,
+            "random_state": 42,
+            "covariance_model": "S1",
+        },
+        dataset,
+    )
+    assert execute_run(run["id"]) == 0
+    detail = client.get(f"/api/runs/{run['id']}").json()
+    assert detail["status"] == "succeeded", detail.get("error_text")
+    summary = artifact(detail, "funclu_k_summary.json")
+    payload = json.loads(
+        client.get(f"/api/artifacts/{summary['id']}/download").content
+    )
+    assert payload["covariance_model"] == "S1"
+    assert payload["covariance_spec"]["n_covariance_parameters"] == 2
+
+
+def test_structured_engine_s4_matches_upstream():
+    from app.pure.funclu import load_curve_fitting_zip
+    from app.pure.funclu_engine import StructuredFunClu
+    from idopnetwork.clustering.funclu import FunClu
+    from idopnetwork.curve_fitting import get_power_function_params
+
+    curve, quasi = load_curve_fitting_zip(curve_zip_bytes())
+    names = list(curve)
+    data = [curve[name] for name in names]
+    parameters = [get_power_function_params(quasi[name]) for name in names]
+    upstream = FunClu(
+        n_components=2, max_iter=100, tol=1e-4, random_state=42
+    ).fit(data, parameter_data=parameters)
+    structured = StructuredFunClu(
+        n_components=2,
+        max_iter=100,
+        tol=1e-4,
+        random_state=42,
+        covariance_model="S4",
+    ).fit(data, parameter_data=parameters)
+    assert abs(upstream.log_likelihood - structured.log_likelihood) < 1e-6
+    assert abs(upstream.bic - structured.bic) < 1e-6
+    assert np.array_equal(
+        upstream.labels.detach().cpu().numpy(),
+        structured.labels.detach().cpu().numpy(),
+    )
 
 
 def test_scan_bic_can_select_a_single_module():
@@ -198,6 +258,7 @@ def test_scan_bic_can_select_a_single_module():
         k_min=1,
         k_max=2,
         step=1,
+        covariance_models=("S4",),
         n_init=1,
         max_iter=200,
     )

@@ -31,5 +31,5 @@
   "funclu.message.charting": {"zh": "生成簇轮廓图", "en": "Rendering cluster profiles"},
   "funclu.message.bic": {"zh": "拟合 K = {{k}}（{{index}}/{{total}}）", "en": "Fitting K = {{k}} ({{index}}/{{total}})"},
   "funclu.message.done": {"zh": "FunClu 完成，K = {{k}}", "en": "FunClu finished with K = {{k}}"},
-  "funclu.message.bic_done": {"zh": "BIC 扫描完成（{{total}} 个 K），推荐 K = {{best}}", "en": "BIC scan finished ({{total}} K values); recommended K = {{best}}"}
+  "funclu.message.bic_done": {"zh": "BIC 扫描完成（{{k_count}} 个 K × {{model_count}} 种协方差结构），推荐 {{model}} · K = {{best}}", "en": "BIC scan finished ({{k_count}} K values × {{model_count}} covariance structures); recommended {{model}}, K = {{best}}"}
 }

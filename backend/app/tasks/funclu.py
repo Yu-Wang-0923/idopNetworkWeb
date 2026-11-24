@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ from app.pure.funclu import (
     build_funclu_k_export_zip,
     common_feature_count,
     load_curve_fitting_zip,
-    save_bic_elbow,
+    save_bic_comparison,
     scan_bic,
 )
 
@@ -25,12 +26,16 @@ class FunCluKParams(BaseModel):
     max_iter: int = Field(default=1000, ge=10, le=2000)
     tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
     random_state: int = Field(default=42, ge=0, le=9999)
+    covariance_model: Literal["S1", "S2", "S3", "S4"] = "S4"
 
 
 class FunCluBicParams(BaseModel):
     k_min: int = Field(default=2, ge=1, le=10000)
     k_max: int = Field(default=20, ge=1, le=10000)
     step: int = Field(default=1, ge=1, le=100)
+    covariance_models: list[Literal["S1", "S2", "S3", "S4"]] = Field(
+        default_factory=lambda: ["S1", "S2", "S3", "S4"]
+    )
     n_init: int = Field(default=5, ge=1, le=10)
     max_iter: int = Field(default=1000, ge=10, le=2000)
     tol: float = Field(default=1e-4, ge=1e-10, le=1.0)
@@ -155,7 +160,7 @@ def _run_funclu_k(ctx: TaskContext) -> None:
             f"n_components={params.n_components} exceeds the {features} shared features"
         )
 
-    from idopnetwork.clustering.funclu import FunClu
+    from app.pure.funclu_engine import StructuredFunClu
     from idopnetwork.curve_fitting import get_power_function_params
 
     ctx.check_cancelled()
@@ -165,11 +170,12 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         "funclu.message.fitting",
         k=params.n_components,
     )
-    model = FunClu(
+    model = StructuredFunClu(
         n_components=params.n_components,
         max_iter=params.max_iter,
         tol=params.tol,
         random_state=params.random_state,
+        covariance_model=params.covariance_model,
     )
     model.fit(
         frames,
@@ -253,6 +259,8 @@ def _run_funclu_k(ctx: TaskContext) -> None:
         "n_conditions": len(conditions),
         "n_features": int(model.n_features),
         "n_components": int(model.n_components),
+        "covariance_model": params.covariance_model,
+        "covariance_spec": model.covariance_spec(),
         "converged": bool(model.converged),
         "n_iter_run": int(model.n_iter_run),
         "max_iter": int(params.max_iter),
@@ -327,6 +335,7 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         k_min=k_min,
         k_max=k_max,
         step=params.step,
+        covariance_models=tuple(params.covariance_models),
         n_init=params.n_init,
         max_iter=params.max_iter,
         tol=params.tol,
@@ -339,8 +348,11 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
 
     selected = bic_df[bic_df["selected"]].iloc[0]
     best_k = int(selected["K"])
+    selected_model = str(selected["covariance_model"])
     valid = bic_df.dropna(subset=["BIC"])
-    raw_best = int(valid.loc[valid["BIC"].idxmin(), "K"])
+    raw_best_row = valid.loc[valid["BIC"].idxmin()]
+    raw_best = int(raw_best_row["K"])
+    raw_best_model = str(raw_best_row["covariance_model"])
     eligible_count = int(bic_df["eligible"].sum())
     min_size_violated = eligible_count == 0
 
@@ -356,21 +368,20 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         mime="text/csv",
         is_primary=True,
     )
-    elbow_path = save_bic_elbow(
+    comparison_path = save_bic_comparison(
         bic_df,
-        ctx.output_dir / "charts" / "bic_elbow.png",
-        best_k=best_k,
-        auto_select_best=False,
+        ctx.output_dir / "charts" / "bic_comparison.png",
     )
     ctx.add_artifact(
-        elbow_path,
-        "charts/bic_elbow.png",
-        "funclu_bic_elbow",
+        comparison_path,
+        "charts/bic_comparison.png",
+        "funclu_bic_comparison",
         kind="png",
         mime="image/png",
     )
     best_row = {
         "K": best_k,
+        "covariance_model": selected_model,
         "BIC": _finite(selected["BIC"]),
         "AIC": _finite(selected["AIC"]),
         "delta_bic": _finite(selected["delta_bic"]),
@@ -378,6 +389,7 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "converged": bool(selected["converged"]),
         "min_cluster_size": int(selected["min_cluster_size"]),
         "n_parameters": int(selected["n_parameters"]),
+        "n_covariance_parameters": int(selected["n_covariance_parameters"]),
     }
     summary = {
         "task": "funclu.bic",
@@ -388,9 +400,12 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         "k_max": k_max,
         "step": params.step,
         "n_init": params.n_init,
-        "k_values": [int(k) for k in bic_df["K"]],
+        "covariance_models": list(params.covariance_models),
+        "k_values": sorted(int(k) for k in bic_df["K"].unique()),
         "recommended_k": best_k,
+        "selected_model": selected_model,
         "raw_best_k": raw_best,
+        "raw_best_model": raw_best_model,
         "selected_at_boundary": best_k in {k_min, k_max},
         "eligible_count": eligible_count,
         "min_size_violated": min_size_violated,
@@ -414,7 +429,9 @@ def _run_funclu_bic(ctx: TaskContext) -> None:
         1.0,
         "funclu.message.bic_done",
         best=best_k,
-        total=len(bic_df),
+        model=selected_model,
+        k_count=len(summary["k_values"]),
+        model_count=len(params.covariance_models),
     )
 
 

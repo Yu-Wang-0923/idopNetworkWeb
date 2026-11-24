@@ -174,7 +174,13 @@
   "funclu.k.tol": "收敛阈值",
   "funclu.k.randomState": "随机种子",
   "funclu.k.submit": "运行 FunClu-K",
-  "funclu.k.tip": "K 必须介于 2 与共享特征数之间；完成后可下载 FunClu-K ZIP 供多层网络重建使用。",
+  "funclu.k.tip": "K 必须介于 2 与共享特征数之间；S4 保持旧模型结果，S1–S3 在条件间共享协方差参数。完成后可下载 FunClu-K ZIP 供多层网络重建使用。",
+  "funclu.covarianceModel": "协方差结构",
+  "funclu.covariance.S1": "S1 · φ、γ 全共享",
+  "funclu.covariance.S2": "S2 · φ 共享，γ 按条件",
+  "funclu.covariance.S3": "S3 · φ 按条件，γ 共享",
+  "funclu.covariance.S4": "S4 · φ、γ 均按条件",
+  "funclu.bic.covarianceModels": "协方差结构（可多选）",
   "funclu.bic.kMin": "k_min",
   "funclu.bic.kMax": "k_max",
   "funclu.bic.step": "步长",
@@ -184,5 +190,5 @@
   "funclu.bic.randomState": "随机种子",
   "funclu.bic.minClusterSize": "最小簇大小",
   "funclu.bic.submit": "运行 BIC 扫描",
-  "funclu.bic.tip": "参考 Fast-Funclu：每个 K 用 n_init 个随机起点并保留似然最优的一次；推荐最小簇大小约束下 BIC 最低的 K，结果表含 AIC、ΔBIC 与 selected 标记；运行中可在 K 结束时取消。"
+  "funclu.bic.tip": "参考 Fast-Funclu：在 K 与所选协方差结构（S1–S4）的联合网格上，每个候选用 n_init 个随机起点并保留似然最优的一次；推荐最小簇大小约束下 BIC 最低的模型，结果表含 AIC、ΔBIC、selected 与结构列；运行中可在 K 结束时取消。"
 }

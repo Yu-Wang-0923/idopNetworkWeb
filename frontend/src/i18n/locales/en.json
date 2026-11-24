@@ -174,7 +174,13 @@
   "funclu.k.tol": "Tolerance",
   "funclu.k.randomState": "Random seed",
   "funclu.k.submit": "Run FunClu-K",
-  "funclu.k.tip": "K must lie between 2 and the number of shared features; the FunClu-K ZIP feeds multi-layer network reconstruction.",
+  "funclu.k.tip": "K must lie between 2 and the number of shared features; S4 keeps the previous model, while S1–S3 share covariance parameters across conditions. The FunClu-K ZIP feeds multi-layer network reconstruction.",
+  "funclu.covarianceModel": "Covariance structure",
+  "funclu.covariance.S1": "S1 · shared φ and γ",
+  "funclu.covariance.S2": "S2 · shared φ, per-condition γ",
+  "funclu.covariance.S3": "S3 · per-condition φ, shared γ",
+  "funclu.covariance.S4": "S4 · per-condition φ and γ",
+  "funclu.bic.covarianceModels": "Covariance structures (multi-select)",
   "funclu.bic.kMin": "k_min",
   "funclu.bic.kMax": "k_max",
   "funclu.bic.step": "Step",
@@ -184,5 +190,5 @@
   "funclu.bic.randomState": "Random seed",
   "funclu.bic.minClusterSize": "Minimum cluster size",
   "funclu.bic.submit": "Run BIC scan",
-  "funclu.bic.tip": "Following Fast-Funclu: each K keeps the highest-likelihood run over n_init starts; the recommended K is the lowest BIC among candidates meeting the minimum module size. The table reports AIC, ΔBIC and a selected flag; a running scan can be cancelled at each K boundary."
+  "funclu.bic.tip": "Following Fast-Funclu: scan the joint grid of K and the selected covariance structures (S1–S4); each candidate keeps the highest-likelihood run over n_init starts. The recommended model is the lowest BIC among candidates meeting the minimum module size, and the table reports AIC, ΔBIC, selected and the structure. A running scan can be cancelled at each K boundary."
 }

@@ -187,6 +187,7 @@ def scan_bic(
     k_min: int = 2,
     k_max: int = 10,
     step: int = 1,
+    covariance_models: tuple[str, ...] = ("S1", "S2", "S3", "S4"),
     n_init: int = 5,
     max_iter: int = 1000,
     tol: float = 1e-4,
@@ -195,16 +196,16 @@ def scan_bic(
     progress: Callable[[int, int, int], None] | None = None,
     check: Callable[[], None] | None = None,
 ) -> pd.DataFrame:
-    """Scan K with the Fast-Funclu selection procedure.
+    """Scan K x covariance structure with the Fast-Funclu selection procedure.
 
     Each candidate keeps the highest-likelihood run over ``n_init`` starting
     seeds instead of aggregating seeds, then reports BIC, AIC, parameter
     counts, convergence and module sizes.  The selected model is the lowest
     BIC among candidates whose smallest module meets ``min_cluster_size``;
-    ``delta_bic`` is measured against it.  The core model exposes S4
-    (condition-specific phi and gamma, shared across modules) only.
+    ``delta_bic`` is measured against it.  S1-S3 share the SAD(1) covariance
+    parameters across conditions; S4 is condition-specific.
     """
-    from idopnetwork.clustering.funclu import FunClu
+    from app.pure.funclu_engine import COVARIANCE_MODELS, StructuredFunClu
 
     if not data:
         raise ValueError("FunClu requires at least one condition")
@@ -212,6 +213,12 @@ def scan_bic(
         raise ValueError("k_min must be at least 1")
     if min_cluster_size < 1:
         raise ValueError("min_cluster_size must be at least 1")
+    models = tuple(str(name).upper() for name in covariance_models)
+    if not models or any(name not in COVARIANCE_MODELS for name in models):
+        raise ValueError(
+            "covariance_models must be a non-empty subset of "
+            + ", ".join(COVARIANCE_MODELS)
+        )
     n_features = min(int(frame.shape[1]) for frame in data)
     effective_max = min(int(k_max), n_features)
     ks = list(range(int(k_min), effective_max + 1, int(step)))
@@ -223,44 +230,48 @@ def scan_bic(
 
     rows: list[dict[str, Any]] = []
     for index, k in enumerate(ks):
-        best = None
-        errors: list[str] = []
-        for offset in range(n_init):
-            if check is not None:
-                check()
-            try:
-                model = FunClu(
-                    n_components=k,
-                    max_iter=max_iter,
-                    tol=tol,
-                    random_state=int(random_state) + offset,
+        for model_name in models:
+            best = None
+            errors: list[str] = []
+            for offset in range(n_init):
+                if check is not None:
+                    check()
+                try:
+                    model = StructuredFunClu(
+                        n_components=k,
+                        max_iter=max_iter,
+                        tol=tol,
+                        random_state=int(random_state) + offset,
+                        covariance_model=model_name,
+                    )
+                    model.fit(data, parameter_data=parameter_data)
+                except Exception as exc:  # noqa: BLE001 - a single start may fail
+                    errors.append(f"{model_name}: {exc}")
+                    continue
+                if best is None or model.log_likelihood > best.log_likelihood:
+                    best = model
+            if best is None:
+                rows.append(
+                    {
+                        "K": k,
+                        "covariance_model": model_name,
+                        "BIC": float("nan"),
+                        "AIC": float("nan"),
+                        "error": "; ".join(errors),
+                    }
                 )
-                model.fit(data, parameter_data=parameter_data)
-            except Exception as exc:  # noqa: BLE001 - a single start may fail
-                errors.append(str(exc))
                 continue
-            if best is None or model.log_likelihood > best.log_likelihood:
-                best = model
-        if best is None:
-            rows.append(
-                {
-                    "K": k,
-                    "covariance_model": "S4",
-                    "BIC": float("nan"),
-                    "AIC": float("nan"),
-                    "error": "; ".join(errors),
-                }
-            )
-        else:
             labels = best.labels.detach().cpu().numpy().astype(int)
             counts = np.bincount(labels, minlength=k)
             sizes = [int(count) for count in counts]
             n_parameters = int(best.n_params)
+            n_covariance = int(best.kernel_.covariance_parameter_count())
             rows.append(
                 {
                     "K": k,
-                    "covariance_model": "S4",
+                    "covariance_model": model_name,
                     "n_parameters": n_parameters,
+                    "n_covariance_parameters": n_covariance,
                     "bic_penalty": float(
                         n_parameters * math.log(max(int(best.n_features), 1))
                     ),
@@ -308,6 +319,7 @@ def scan_bic(
         "eligible",
         "AIC",
         "n_parameters",
+        "n_covariance_parameters",
         "bic_penalty",
         "log_likelihood",
         "SI",
@@ -324,29 +336,61 @@ def scan_bic(
     return table[[column for column in leading if column in table.columns]]
 
 
-def save_bic_elbow(
-    bic_df: pd.DataFrame,
-    path: Path,
-    *,
-    best_k: int | None,
-    candidate_ks: list[int] | None = None,
-    auto_select_best: bool = True,
-) -> Path:
-    """Render the BIC elbow figure with the upstream matplotlib style."""
-    from idopnetwork.clustering.plot import plot_bic_elbow
-
-    figure = plot_bic_elbow(
-        bic_results=bic_df,
-        best_K=best_k,
-        candidate_Ks=candidate_ks,
-        auto_select_best=auto_select_best,
-        show_in_streamlit=False,
-        title="FunClu BIC across K (S4 covariance)",
-        ylabel="BIC (lower is better)",
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(path, dpi=200, bbox_inches="tight")
+def save_bic_comparison(bic_df: pd.DataFrame, path: Path) -> Path:
+    """BIC across K for every fitted SAD(1) covariance structure."""
     import matplotlib.pyplot as plt
 
+    colors = {
+        "S1": "#1f77b4",
+        "S2": "#ff7f0e",
+        "S3": "#2ca02c",
+        "S4": "#9467bd",
+    }
+    figure, axes = plt.subplots(figsize=(8.2, 5.2), constrained_layout=True)
+    models = [
+        name
+        for name in ("S1", "S2", "S3", "S4")
+        if name in set(bic_df["covariance_model"])
+    ]
+    for name in models:
+        subset = (
+            bic_df[bic_df["covariance_model"] == name]
+            .dropna(subset=["BIC"])
+            .sort_values("K")
+        )
+        if subset.empty:
+            continue
+        axes.plot(
+            subset["K"],
+            subset["BIC"],
+            marker="o",
+            linewidth=1.8,
+            color=colors[name],
+            label=name,
+        )
+        local = subset.loc[subset["BIC"].idxmin()]
+        axes.scatter(
+            [local["K"]], [local["BIC"]], s=55, color=colors[name], zorder=5
+        )
+    selected = bic_df[bic_df["selected"]]
+    if not selected.empty:
+        row = selected.iloc[0]
+        axes.scatter(
+            [row["K"]],
+            [row["BIC"]],
+            marker="*",
+            s=220,
+            color="black",
+            zorder=6,
+            label=f"selected: {row['covariance_model']}, K={int(row['K'])}",
+        )
+    axes.set_xlabel("Number of clusters K")
+    axes.set_ylabel("BIC (lower is better)")
+    axes.set_title("FunClu BIC across K and SAD(1) covariance structures")
+    axes.set_xticks(sorted(int(k) for k in bic_df["K"].dropna().unique()))
+    axes.grid(alpha=0.25, linestyle=":")
+    axes.legend(frameon=False)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(path, dpi=220, bbox_inches="tight")
     plt.close(figure)
     return path
