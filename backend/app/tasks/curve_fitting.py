@@ -10,9 +10,8 @@ from pydantic import BaseModel, Field
 
 from app.jobs.context import TaskContext
 from app.jobs.registry import StageSpec, TaskSpec, register
-from app.pure.charts import curve_fitting_html
+from app.pure.charts import curve_fitting_html, ecg_fitting_html
 from app.pure.curve_fitting import build_fitting_export, fit_uploaded_csv
-from app.pure.ecg import render_ecg_fitting
 
 
 class CurveFittingParams(BaseModel):
@@ -211,28 +210,32 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                 name=name,
             )
             base = _filebase(name)
-            output_dir = ctx.output_dir / "ecg" / base
-            leads, paths = render_ecg_fitting(
-                tables["quasi_dynamic"],
-                tables["curve_sample"],
-                output_dir,
-                sampling_rate=params.ecg_sampling_rate,
+            try:
+                html = ecg_fitting_html.render(
+                    tables["quasi_dynamic"],
+                    tables["curve_sample"],
+                    sampling_rate=params.ecg_sampling_rate,
+                    title=f"ECG Fitting · {name}",
+                )
+            except Exception as exc:  # noqa: BLE001 - chart failures are non-fatal
+                ctx.log(
+                    "curve_fitting.message.file_failed",
+                    level="error",
+                    name=name,
+                    raw_text=f"{name}: ECG figure failed: {exc}",
+                )
+                continue
+            path = _write_text(
+                ctx.output_dir / "charts" / base / "ecg_fitting.html",
+                html,
             )
-            mime_by_extension = {
-                "png": "image/png",
-                "pdf": "application/pdf",
-                "svg": "image/svg+xml",
-            }
-            for lead, png_path in zip(leads, paths):
-                for extension, mime in mime_by_extension.items():
-                    source = png_path.with_suffix(f".{extension}")
-                    ctx.add_artifact(
-                        source,
-                        f"charts/ecg/{base}/{lead}_fitting.{extension}",
-                        "curve_fitting_ecg",
-                        kind=extension,
-                        mime=mime,
-                    )
+            ctx.add_artifact(
+                path,
+                f"charts/{base}/ecg_fitting.html",
+                "curve_fitting_ecg_html",
+                kind="html",
+                mime="text/html",
+            )
     else:
         for index, (name, tables) in enumerate(results.items()):
             ctx.check_cancelled()

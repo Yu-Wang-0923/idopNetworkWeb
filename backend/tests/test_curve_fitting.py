@@ -156,10 +156,16 @@ def test_dynamic_ecg_end_to_end(client):
     detail = client.get(f"/api/runs/{run['id']}").json()
     assert detail["status"] == "succeeded", detail.get("error_text")
     assert artifact(detail, "curve_fitting_export.zip")["kind"] == "zip"
-    ecg = [
-        item
+    chart = artifact(detail, "charts/ecg_100hz/ecg_fitting.html")
+    assert chart["kind"] == "html"
+    content = client.get(f"/api/artifacts/{chart['id']}/content")
+    assert content.status_code == 200
+    assert "Lead I · Full record" in content.text
+    assert "Lead I · First 250 samples" in content.text
+    assert "Time (s)" in content.text
+    assert "Signal (stored units)" in content.text
+    assert "#d73027" in content.text
+    assert not any(
+        item["semantic_type"] == "curve_fitting_ecg"
         for item in detail["artifacts"]
-        if item["semantic_type"] == "curve_fitting_ecg"
-    ]
-    assert len(ecg) == 12 * 3
-    assert {item["kind"] for item in ecg} == {"png", "pdf", "svg"}
+    )

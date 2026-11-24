@@ -262,7 +262,7 @@ export default function RunDetailPage() {
               {chartArtifact ? (
                 <HtmlArtifactFrame
                   artifactId={chartArtifact.id}
-                  height={720}
+                  height={820}
                   title={chartArtifact.logical_name}
                 />
               ) : null}

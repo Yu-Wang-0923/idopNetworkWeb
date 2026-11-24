@@ -6,7 +6,7 @@ interface Props {
   title?: string;
 }
 
-export default function HtmlArtifactFrame({ artifactId, height = 720, title }: Props) {
+export default function HtmlArtifactFrame({ artifactId, height = 820, title }: Props) {
   return (
     <iframe
       className="artifact-frame"
