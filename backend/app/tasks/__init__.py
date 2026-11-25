@@ -1,2 +1,9 @@
 """Task modules register themselves on import."""
-from app.tasks import curve_fitting, demo, funclu, netrecon, netrecon_multi  # noqa: F401
+from app.tasks import (  # noqa: F401
+    curve_fitting,
+    demo,
+    funclu,
+    netanal,
+    netrecon,
+    netrecon_multi,
+)

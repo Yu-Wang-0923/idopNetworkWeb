@@ -19,6 +19,7 @@ def test_backend_does_not_import_streamlit():
     import app.tasks.curve_fitting  # noqa: F401
     import app.tasks.demo  # noqa: F401
     import app.tasks.funclu  # noqa: F401
+    import app.tasks.netanal  # noqa: F401
     import app.tasks.netrecon  # noqa: F401
     import app.worker  # noqa: F401
 

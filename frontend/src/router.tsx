@@ -4,7 +4,7 @@ import CurveFittingPage from "./pages/CurveFittingPage";
 import DemoPage from "./pages/DemoPage";
 import FunCluPage from "./pages/FunCluPage";
 import HomePage from "./pages/HomePage";
-import ModulePlaceholder from "./pages/ModulePlaceholder";
+import NetAnalPage from "./pages/NetAnalPage";
 import NetReconPage from "./pages/NetReconPage";
 import RunDetailPage from "./pages/RunDetailPage";
 import RunsPage from "./pages/RunsPage";
@@ -20,10 +20,7 @@ export function AppRouter() {
         <Route path="modules/curve-fitting" element={<CurveFittingPage />} />
         <Route path="modules/funclu" element={<FunCluPage />} />
         <Route path="modules/netrecon" element={<NetReconPage />} />
-        <Route
-          path="modules/netanal"
-          element={<ModulePlaceholder moduleKey="netanal" phase={5} />}
-        />
+        <Route path="modules/netanal" element={<NetAnalPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

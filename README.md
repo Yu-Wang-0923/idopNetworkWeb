@@ -7,7 +7,7 @@ A web computing platform for the **idopNetwork** complex-systems analysis framew
 3. **NetRecon** — single-layer and multi-layer interaction network reconstruction.
 4. **NetAnal** — GLMY persistent path homology analysis.
 
-The platform is being built in phases. Phase 0 (current) provides the anonymous workspace, upload storage, a durable job queue with a separate worker process, and the application shell.
+The platform is being built in phases. Phases 0–5 are complete: anonymous workspace, durable job queue, Curve Fitting, FunClu, NetRecon (single and multi), and NetAnal.
 
 ## Architecture
 
@@ -60,7 +60,8 @@ Open http://localhost:5173.
 - Phase 2: FunClu — EM functional clustering with a FunClu-K export ZIP and cluster-profile HTML, plus a BIC scan over K × S1–S4 covariance structures (best of n_init starts, AIC/ΔBIC/selected table, comparison plot) that can be cancelled at K boundaries.
 - Phase 3: NetRecon single-layer — ASGL, static idop and dynamic idopECG reconstruction with an interactive network HTML (offline vis-network), effect-decomposition HTML, adjacency heatmap HTML, and the `single_layer_idopnetwork_export.zip` contract.
 - Phase 4: NetRecon multi-layer — inter-module and intra-module networks from a FunClu-K export, with a publication HTML overview matrix, per-network interactive HTML, skipped-network reporting, and `multi_layer_idopnetwork_export.zip`.
-- Later phases: NetAnal and platform hardening.
+- Phase 5: NetAnal — regular GLMY path homology on a subnetwork of a single- or multi-layer NetRecon export, with all-edges-coloured or sign-separated figures (PNG/SVG/PDF), tables, and a `glmy_<mode>.zip` package.
+- Later phase: platform hardening (derived charts, quotas and cleanup, docs, cross-browser checks).
 
 ### FunClu engine
 
