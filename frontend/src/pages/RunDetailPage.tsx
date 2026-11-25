@@ -8,6 +8,7 @@ import {
   Card,
   Descriptions,
   Image,
+  InputNumber,
   List,
   Modal,
   Progress,
@@ -51,8 +52,19 @@ function chartPriority(artifact: Artifact): number {
   if (artifact.semantic_type === "netrecon_network_html") return 1;
   if (artifact.semantic_type === "netrecon_effect_html") return 2;
   if (artifact.semantic_type === "netrecon_heatmap_html") return 3;
+  if (artifact.semantic_type.startsWith("netrecon_derived_")) return 5;
   if (artifact.logical_name.includes("compare")) return 9;
   return 4;
+}
+
+function memberLabel(member: string): string {
+  if (member === "from_to.csv") {
+    return "single_layer";
+  }
+  if (member.endsWith("/from_to.csv")) {
+    return member.slice(0, -"/from_to.csv".length);
+  }
+  return member;
 }
 
 export default function RunDetailPage() {
@@ -97,6 +109,46 @@ export default function RunDetailPage() {
 
   const [selectedChart, setSelectedChart] = useState<string | null>(null);
   const [previewArtifact, setPreviewArtifact] = useState<Artifact | null>(null);
+  const [derivedKind, setDerivedKind] = useState<"network" | "effect" | "heatmap">(
+    "network",
+  );
+  const [derivedMember, setDerivedMember] = useState<string | undefined>();
+  const [derivedTopEdges, setDerivedTopEdges] = useState(0);
+  const runForDerived = runQuery.data;
+  const isMultiRun = runForDerived?.task_key === "netrecon.multi";
+  const derivedSupported =
+    runForDerived?.status === "succeeded" &&
+    ["netrecon.single", "netrecon.multi"].includes(runForDerived.task_key);
+  const exportArtifact = runForDerived?.artifacts.find((item) =>
+    ["single_layer_idopnetwork_export", "multi_layer_idopnetwork_export"].includes(
+      item.semantic_type,
+    ),
+  );
+  const memberQuery = useQuery({
+    queryKey: ["derived-members", exportArtifact?.id],
+    queryFn: () => api.inspectArtifact(exportArtifact?.id ?? ""),
+    enabled: Boolean(isMultiRun && exportArtifact),
+  });
+  useEffect(() => {
+    const members = memberQuery.data?.members ?? [];
+    if (members.length && (!derivedMember || !members.includes(derivedMember))) {
+      setDerivedMember(members[0]);
+    }
+  }, [memberQuery.data, derivedMember]);
+  const derivedMutation = useMutation({
+    mutationFn: () =>
+      api.derivedChart(runId, {
+        kind: derivedKind,
+        member: isMultiRun ? derivedMember : undefined,
+        top_edges: derivedKind === "network" ? derivedTopEdges : 0,
+      }),
+    onSuccess: async (created) => {
+      message.success(t("run.derived.created"));
+      await queryClient.invalidateQueries({ queryKey: ["run", runId] });
+      setSelectedChart(created.id);
+    },
+    onError: () => message.error(t("run.derived.failed")),
+  });
   const tableQuery = useQuery({
     queryKey: ["artifact-table", previewArtifact?.id],
     queryFn: () => api.artifactTable(previewArtifact?.id ?? ""),
@@ -393,6 +445,69 @@ export default function RunDetailPage() {
               </div>
             </Image.PreviewGroup>
           ) : null}
+        </Card>
+      ) : null}
+
+      {derivedSupported ? (
+        <Card size="small" title={t("run.derived.title")}>
+          <Space wrap align="end" size={12}>
+            <Space direction="vertical" size={2}>
+              <Text type="secondary">{t("run.derived.kind")}</Text>
+              <Select
+                id="derived-kind"
+                value={derivedKind}
+                onChange={(value) => setDerivedKind(value)}
+                style={{ minWidth: 200 }}
+                options={[
+                  { value: "network", label: t("run.derived.kind.network") },
+                  { value: "effect", label: t("run.derived.kind.effect") },
+                  { value: "heatmap", label: t("run.derived.kind.heatmap") },
+                ]}
+              />
+            </Space>
+            {isMultiRun ? (
+              <Space direction="vertical" size={2}>
+                <Text type="secondary">{t("run.derived.member")}</Text>
+                <Select
+                  id="derived-member"
+                  value={derivedMember}
+                  onChange={(value) => setDerivedMember(value)}
+                  loading={memberQuery.isLoading}
+                  style={{ minWidth: 300, maxWidth: 460 }}
+                  options={(memberQuery.data?.members ?? []).map((member) => ({
+                    value: member,
+                    label: memberLabel(member),
+                  }))}
+                />
+              </Space>
+            ) : null}
+            {derivedKind === "network" ? (
+              <Space direction="vertical" size={2}>
+                <Text type="secondary">{t("run.derived.topEdges")}</Text>
+                <InputNumber
+                  id="derived-top-edges"
+                  min={0}
+                  max={100000}
+                  value={derivedTopEdges}
+                  onChange={(value) => setDerivedTopEdges(value ?? 0)}
+                  style={{ width: 180 }}
+                />
+              </Space>
+            ) : null}
+            <Button
+              type="primary"
+              loading={derivedMutation.isPending}
+              disabled={isMultiRun && !derivedMember}
+              onClick={() => derivedMutation.mutate()}
+            >
+              {t("run.derived.submit")}
+            </Button>
+          </Space>
+          <Paragraph type="secondary" style={{ margin: "10px 0 0" }}>
+            {derivedKind === "network"
+              ? t("run.derived.help.network")
+              : t("run.derived.help.other")}
+          </Paragraph>
         </Card>
       ) : null}
 

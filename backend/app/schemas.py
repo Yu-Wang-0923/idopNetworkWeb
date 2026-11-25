@@ -77,6 +77,12 @@ class RunCreate(BaseModel):
     inputs: list[InputRef] = Field(default_factory=list)
 
 
+class DerivedChartCreate(BaseModel):
+    kind: Literal["network", "effect", "heatmap"]
+    member: str | None = None
+    top_edges: int = Field(default=0, ge=0, le=100_000)
+
+
 class RunSummary(BaseModel):
     id: str
     module: str

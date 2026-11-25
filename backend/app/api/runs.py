@@ -11,10 +11,19 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..jobs.registry import get_task
+from ..derived import DerivedChartError, create_derived_chart
+from ..jobs.registry import get_task, task_enabled
 from ..models import Artifact, Dataset, JobLog, Run, RunInput, Workspace, utcnow
-from ..schemas import ArtifactOut, InputRef, LogOut, RunCreate, RunOut, RunSummary
-from ..serializers import run_out, run_summary
+from ..schemas import (
+    ArtifactOut,
+    DerivedChartCreate,
+    InputRef,
+    LogOut,
+    RunCreate,
+    RunOut,
+    RunSummary,
+)
+from ..serializers import artifact_out, run_out, run_summary
 from .deps import get_run_read, get_run_write, get_workspace, rate_limit, verify_origin
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -88,7 +97,7 @@ def create_run(
     _rate: None = Depends(rate_limit),
 ) -> RunOut:
     spec = get_task(payload.task_key)
-    if spec is None or not spec.enabled:
+    if spec is None or not task_enabled(spec, settings):
         raise HTTPException(status_code=404, detail={"code": "task.not_found"})
     try:
         validated = spec.params_model.model_validate(payload.params)
@@ -158,6 +167,49 @@ def read_run(
 ) -> RunOut:
     run = get_run_read(db, run_id)
     return run_out(db, run)
+
+
+@router.post(
+    "/{run_id}/derived-charts",
+    response_model=ArtifactOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_derived_chart_endpoint(
+    run_id: str,
+    payload: DerivedChartCreate,
+    workspace: Workspace = Depends(get_workspace),
+    settings: Settings = Depends(get_settings),
+    db: Session = Depends(get_db),
+    _origin: None = Depends(verify_origin),
+    _rate: None = Depends(rate_limit),
+) -> ArtifactOut:
+    run = get_run_write(db, run_id, workspace)
+    if run.status != "succeeded":
+        raise HTTPException(status_code=409, detail={"code": "run.not_succeeded"})
+    if run.task_key not in {"netrecon.single", "netrecon.multi"}:
+        raise HTTPException(
+            status_code=400, detail={"code": "derived.unsupported_run"}
+        )
+    try:
+        artifact = create_derived_chart(
+            db,
+            settings,
+            run,
+            kind=payload.kind,
+            member=payload.member,
+            top_edges=payload.top_edges,
+        )
+    except DerivedChartError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+    except Exception as exc:  # noqa: BLE001 - report unreadable exports as a 400
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "derived.failed", "message": str(exc)},
+        ) from exc
+    return artifact_out(artifact)
 
 
 @router.post("/{run_id}/cancel", response_model=RunOut)

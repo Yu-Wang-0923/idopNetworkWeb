@@ -266,6 +266,18 @@ def _to_csv_utf8_sig(df: pd.DataFrame, *, index: bool) -> bytes:
     return df.to_csv(index=index).encode("utf-8-sig")
 
 
+def intercept_frame(network: dict) -> pd.DataFrame:
+    """Per-target model intercept, needed to redraw effect decomposition."""
+    adj_df: pd.DataFrame = network["adj_df"]
+    targets = [str(column) for column in adj_df.index]
+    model = network["model"]
+    try:
+        values = model.coef_.loc["intercept"].reindex(targets).fillna(0.0).astype(float)
+    except Exception:
+        values = pd.Series(0.0, index=targets, dtype=float)
+    return pd.DataFrame({"target": targets, "intercept": values.to_numpy(dtype=float)})
+
+
 def collect_network_export_artifacts(
     network: dict,
     *,
@@ -280,6 +292,7 @@ def collect_network_export_artifacts(
         for target, effect in zip(adj_df.index, effect_df_list)
     }
     from_to_df = adjacency_to_from_to(adj_df)
+    intercepts_df = intercept_frame(network)
     params: dict[str, object] = {
         "max_order": int(model.max_order),
         "alpha": float(model.alpha),
@@ -312,6 +325,7 @@ def collect_network_export_artifacts(
         "effect_map": effect_map,
         "from_to_df": from_to_df,
         "params_df": params_to_df(params),
+        "intercepts_df": intercepts_df,
         "dynamic_tables": getattr(model, "ecg_exports_", {}),
     }
 
@@ -338,6 +352,10 @@ def build_singlelayer_export_zip(result: dict) -> bytes:
         archive.writestr(
             "params.csv",
             _to_csv_utf8_sig(artifacts["params_df"], index=False),
+        )
+        archive.writestr(
+            "intercepts.csv",
+            _to_csv_utf8_sig(artifacts["intercepts_df"], index=False),
         )
         for name, table in artifacts["dynamic_tables"].items():
             archive.writestr(
@@ -553,6 +571,10 @@ def build_multilayer_export_zip(
                 f"{base}/params.csv",
                 _to_csv_utf8_sig(artifacts["params_df"], index=False),
             )
+            archive.writestr(
+                f"{base}/intercepts.csv",
+                _to_csv_utf8_sig(artifacts["intercepts_df"], index=False),
+            )
             for name, table in artifacts["dynamic_tables"].items():
                 archive.writestr(
                     f"{base}/dynamic/{name}.csv",
@@ -588,6 +610,10 @@ def build_multilayer_export_zip(
                 archive.writestr(
                     f"{base}/params.csv",
                     _to_csv_utf8_sig(artifacts["params_df"], index=False),
+                )
+                archive.writestr(
+                    f"{base}/intercepts.csv",
+                    _to_csv_utf8_sig(artifacts["intercepts_df"], index=False),
                 )
                 for name, table in artifacts["dynamic_tables"].items():
                     archive.writestr(

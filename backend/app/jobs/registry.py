@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from .context import TaskContext
+
+if TYPE_CHECKING:
+    from app.config import Settings
 
 
 @dataclass(frozen=True)
@@ -45,11 +48,25 @@ def get_task(key: str) -> TaskSpec | None:
     return TASKS.get(key)
 
 
-def enabled_tasks() -> list[TaskSpec]:
-    return [spec for spec in TASKS.values() if spec.enabled]
+def task_enabled(spec: TaskSpec, settings: "Settings | None" = None) -> bool:
+    if not spec.enabled:
+        return False
+    return settings is None or spec.key not in settings.disabled_task_keys
 
 
-def task_public_spec(spec: TaskSpec) -> dict[str, Any]:
+def task_maturity(spec: TaskSpec, settings: "Settings | None" = None) -> str:
+    if settings is not None and spec.key in settings.beta_task_keys:
+        return "beta"
+    return spec.maturity
+
+
+def enabled_tasks(settings: "Settings | None" = None) -> list[TaskSpec]:
+    return [spec for spec in TASKS.values() if task_enabled(spec, settings)]
+
+
+def task_public_spec(
+    spec: TaskSpec, settings: "Settings | None" = None
+) -> dict[str, Any]:
     return {
         "key": spec.key,
         "module": spec.module,
@@ -58,8 +75,8 @@ def task_public_spec(spec: TaskSpec) -> dict[str, Any]:
         "params_schema": spec.params_model.model_json_schema(),
         "input_roles": list(spec.input_roles),
         "stages": [{"key": stage.key, "weight": stage.weight} for stage in spec.stages],
-        "maturity": spec.maturity,
-        "enabled": spec.enabled,
+        "maturity": task_maturity(spec, settings),
+        "enabled": task_enabled(spec, settings),
     }
 
 

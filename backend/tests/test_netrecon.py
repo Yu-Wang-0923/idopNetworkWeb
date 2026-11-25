@@ -119,6 +119,7 @@ def assert_network_artifacts(client, detail: dict) -> None:
         assert "adjacency_matrix.csv" in members
         assert "from_to.csv" in members
         assert "params.csv" in members
+        assert "intercepts.csv" in members
         assert any(name.startswith("effect/") for name in members)
 
     network = artifact(detail, "charts/network.html")
@@ -260,6 +261,7 @@ def test_netrecon_multi_end_to_end(client):
             name.startswith("intra_cluster/") and name.endswith("adjacency_matrix.csv")
             for name in members
         )
+        assert any(name.endswith("/intercepts.csv") for name in members)
 
     overview = artifact(detail, "charts/multilayer_overview.html")
     html = client.get(f"/api/artifacts/{overview['id']}/content").text

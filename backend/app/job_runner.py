@@ -11,7 +11,7 @@ from .config import get_settings
 from .db import get_session_factory, init_db
 from .jobs.context import ResolvedInput, RunCancelled, TaskContext
 from .jobs.registry import get_task
-from .models import Artifact, Dataset, Run, utcnow
+from .models import Artifact, Dataset, Run, Workspace, utcnow
 from .storage import Storage, sha256_file
 
 
@@ -70,12 +70,15 @@ def _publish_artifacts(ctx: TaskContext, run: Run, db, storage: Storage) -> None
     artifacts_dir = storage.run_artifacts_dir(run.id)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     used: set[str] = set()
+    published_bytes = 0
     for registered in ctx.registered_artifacts:
         relative = _unique_name(_artifact_name(registered.logical_name), used)
         used.add(relative)
         destination = storage.resolve_within(artifacts_dir, relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(registered.source), str(destination))
+        size = destination.stat().st_size
+        published_bytes += size
         db.add(
             Artifact(
                 run_id=run.id,
@@ -85,11 +88,14 @@ def _publish_artifacts(ctx: TaskContext, run: Run, db, storage: Storage) -> None
                 semantic_type=registered.semantic_type,
                 kind=registered.kind,
                 mime=registered.mime,
-                size_bytes=destination.stat().st_size,
+                size_bytes=size,
                 sha256=sha256_file(destination),
                 is_primary=registered.is_primary,
             )
         )
+    workspace = db.get(Workspace, run.workspace_id)
+    if workspace is not None:
+        workspace.storage_bytes = (workspace.storage_bytes or 0) + published_bytes
     db.commit()
 
 

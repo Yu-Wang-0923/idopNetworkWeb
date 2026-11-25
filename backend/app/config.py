@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     max_concurrent_runs_per_workspace: int = 5
     max_runs_per_day_per_workspace: int = 100
+    max_storage_bytes_per_workspace: int = 2 * 1024 * 1024 * 1024
+    disabled_tasks: str = ""
+    beta_tasks: str = ""
 
     worker_poll_seconds: float = 1.0
     worker_heartbeat_seconds: float = 10.0
@@ -49,6 +52,14 @@ class Settings(BaseSettings):
     @property
     def allowed_origins_list(self) -> list[str]:
         return [item.strip() for item in self.allowed_origins.split(",") if item.strip()]
+
+    @property
+    def disabled_task_keys(self) -> set[str]:
+        return {item.strip() for item in self.disabled_tasks.split(",") if item.strip()}
+
+    @property
+    def beta_task_keys(self) -> set[str]:
+        return {item.strip() for item in self.beta_tasks.split(",") if item.strip()}
 
     @property
     def uploads_dir(self) -> Path:

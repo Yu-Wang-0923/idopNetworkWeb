@@ -127,3 +127,9 @@ export interface CreateRunPayload {
     artifact_id?: string;
   }>;
 }
+
+export interface DerivedChartPayload {
+  kind: "network" | "effect" | "heatmap";
+  member?: string;
+  top_edges?: number;
+}

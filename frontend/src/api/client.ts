@@ -3,6 +3,7 @@ import type {
   ArtifactTable,
   CreateRunPayload,
   Dataset,
+  DerivedChartPayload,
   InspectResult,
   LogEntry,
   RunDetail,
@@ -68,6 +69,11 @@ export const api = {
     request<RunDetail>(`/runs/${runId}/cancel`, { method: "POST" }),
   retryRun: (runId: string) =>
     request<RunDetail>(`/runs/${runId}/retry`, { method: "POST" }),
+  derivedChart: (runId: string, payload: DerivedChartPayload) =>
+    request<Artifact>(`/runs/${runId}/derived-charts`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   logs: (runId: string, afterSeq = 0) =>
     request<LogEntry[]>(`/runs/${runId}/logs?after_seq=${afterSeq}`),
 

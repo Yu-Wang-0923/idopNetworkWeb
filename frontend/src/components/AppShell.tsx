@@ -17,6 +17,41 @@ export default function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const session = useQuery({ queryKey: ["session"], queryFn: api.session });
+  const tasksQuery = useQuery({
+    queryKey: ["tasks"],
+    queryFn: api.tasks,
+    staleTime: 60_000,
+  });
+
+  const moduleRoutes: Record<string, string> = {
+    curve_fitting: "/modules/curve-fitting",
+    funclu: "/modules/funclu",
+    netrecon: "/modules/netrecon",
+    netanal: "/modules/netanal",
+  };
+  const moduleBeta = new Map<string, boolean>();
+  for (const task of tasksQuery.data ?? []) {
+    if (!(task.module in moduleRoutes)) continue;
+    moduleBeta.set(
+      task.module,
+      (moduleBeta.get(task.module) ?? false) || task.maturity === "beta",
+    );
+  }
+  const moduleItems = Object.entries(moduleRoutes)
+    .filter(([module]) => (tasksQuery.isSuccess ? moduleBeta.has(module) : true))
+    .map(([module, path]) => ({
+      key: path,
+      label: (
+        <Space size={6}>
+          <span>{t(`module.${module}.title`)}</span>
+          {moduleBeta.get(module) ? (
+            <Tag color="gold" bordered={false}>
+              beta
+            </Tag>
+          ) : null}
+        </Space>
+      ),
+    }));
 
   const selectedKey = location.pathname.startsWith("/runs")
     ? "/runs"
@@ -31,12 +66,7 @@ export default function AppShell() {
     {
       type: "group" as const,
       label: t("nav.modules"),
-      children: [
-        { key: "/modules/curve-fitting", label: t("module.curve_fitting.title") },
-        { key: "/modules/funclu", label: t("module.funclu.title") },
-        { key: "/modules/netrecon", label: t("module.netrecon.title") },
-        { key: "/modules/netanal", label: t("module.netanal.title") },
-      ],
+      children: moduleItems,
     },
   ];
 

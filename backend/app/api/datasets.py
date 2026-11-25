@@ -41,6 +41,8 @@ def upload_dataset(
     if suffix not in {".csv", ".zip"}:
         raise HTTPException(status_code=400, detail={"code": "upload.unsupported_type"})
     max_bytes = settings.max_zip_bytes if suffix == ".zip" else settings.max_csv_bytes
+    if (workspace.storage_bytes or 0) >= settings.max_storage_bytes_per_workspace:
+        raise HTTPException(status_code=413, detail={"code": "storage.quota"})
 
     storage = Storage(settings)
     dataset = Dataset(
@@ -66,6 +68,10 @@ def upload_dataset(
         raise
 
     path = storage.dataset_path(stored_path)
+    if (workspace.storage_bytes or 0) + size > settings.max_storage_bytes_per_workspace:
+        shutil.rmtree(storage.dataset_dir(dataset.id), ignore_errors=True)
+        db.rollback()
+        raise HTTPException(status_code=413, detail={"code": "storage.quota"})
     try:
         kind, _names = detect_kind(path, settings)
     except StorageError as exc:
