@@ -19,6 +19,7 @@
   "curve_fitting.message.charting": {"zh": "绘图：{{name}}", "en": "Rendering figures: {{name}}"},
   "curve_fitting.message.file_failed": {"zh": "文件失败：{{name}}", "en": "File failed: {{name}}"},
   "curve_fitting.message.done": {"zh": "曲线拟合完成，共 {{files}} 个文件", "en": "Curve fitting finished for {{files}} files"},
+  "curve_fitting.message.below_min_nonzero": {"zh": "{{name}}：{{count}} 个特征的非零观测少于 {{min_nonzero}} 个，未拟合：{{features}}", "en": "{{name}}: {{count}} features have fewer than {{min_nonzero}} nonzero observations and were not fitted: {{features}}"},
   "funclu.stage.load": {"zh": "读取输入", "en": "Loading input"},
   "funclu.stage.fit": {"zh": "EM 聚类", "en": "Fitting clusters"},
   "funclu.stage.bic": {"zh": "BIC 扫描", "en": "Scanning BIC"},

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from app.job_runner import execute_run
 from app.pure.charts import curve_fitting_html
 from app.pure.curve_fitting import build_fitting_export, fit_uploaded_csv
+from app.pure.funclu import observed_condition_frames
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -75,6 +78,26 @@ def test_quasi_fit_and_export_contract():
         assert frame.shape == (10, 3)
 
 
+ZERO_CSV = b"sample,a,b\ns1,0,1\ns2,2,2\ns3,3,3\ns4,4,4\ns5,5,5\n"
+
+
+def test_mask_zeros_excludes_raw_zeros_from_the_fit():
+    plain = fit_uploaded_csv(ZERO_CSV, n_samples=10, trim_percent=0)
+    masked = fit_uploaded_csv(ZERO_CSV, n_samples=10, trim_percent=0, mask_zeros=True)
+    assert "masked" not in plain
+    # Z_min_add1 then Log10_1p turns the raw 0 into log10(2) > 0, so it is fitted
+    # unless masked.
+    assert plain["curve_params"].loc["a", "n_positive"] == 5
+    assert masked["curve_params"].loc["a", "n_positive"] == 4
+    assert masked["curve_params"].loc["b", "n_positive"] == 5
+    flags = masked["masked"]
+    assert flags.index.equals(masked["quasi_dynamic"].index)
+    (row,) = np.flatnonzero(flags["a"].to_numpy())
+    assert masked["quasi_dynamic"]["a"].iloc[row] == pytest.approx(np.log10(2))
+    assert not flags["b"].any()
+    pd.testing.assert_frame_equal(masked["quasi_dynamic"], plain["quasi_dynamic"])
+
+
 def test_renderer_escapes_feature_names():
     feature = "<script>alert(1)</script>"
     frame = pd.DataFrame({feature: [1.0, 2.0, 3.0]}, index=[1.0, 2.0, 3.0])
@@ -128,6 +151,111 @@ def test_quasi_end_to_end(client):
     raw = client.get(f"/api/artifacts/{table['id']}/download").content
     assert b"\r\r\n" not in raw
     assert len(pd.read_csv(io.BytesIO(raw))) == 2
+
+
+def test_mask_zeros_end_to_end(client):
+    datasets = [
+        upload_csv(client, "zeros.csv", ZERO_CSV),
+        upload_csv(client, "zeros2.csv", ZERO_CSV),
+    ]
+    run = create_run(
+        client,
+        {
+            "data_mode": "quasi_dynamic",
+            "n_samples": 10,
+            "trim_percent": 0,
+            "mask_zeros": True,
+        },
+        datasets,
+    )
+    assert execute_run(run["id"]) == 0
+    detail = client.get(f"/api/runs/{run['id']}").json()
+    assert detail["status"] == "succeeded", detail.get("error_text")
+
+    summary = artifact(detail, "curve_fitting_summary.json")
+    payload = json.loads(client.get(f"/api/artifacts/{summary['id']}/download").content)
+    assert payload["params"]["mask_zeros"] is True
+    assert [item["masked_points"] for item in payload["files"]] == [1, 1]
+
+    for name in ("charts/zeros/curve_fitting.html", "charts/compare.html"):
+        chart = artifact(detail, name)
+        html = client.get(f"/api/artifacts/{chart['id']}/content").text
+        assert '"masked": [0]' in html, name
+
+
+SPARSE_CSV = (
+    b"sample,dense,sparse\n"
+    b"s1,1,0\n"
+    b"s2,2,0\n"
+    b"s3,3,1\n"
+    b"s4,4,0\n"
+    b"s5,5,2\n"
+    b"s6,6,0\n"
+    b"s7,7,3\n"
+    b"s8,8,0\n"
+)
+
+
+def test_min_nonzero_leaves_sparse_features_out_of_the_fit():
+    plain = fit_uploaded_csv(SPARSE_CSV, n_samples=10, trim_percent=0)
+    tables = fit_uploaded_csv(SPARSE_CSV, n_samples=10, trim_percent=0, min_nonzero=6)
+    assert "below_min_nonzero" not in plain
+    assert tables["below_min_nonzero"].to_dict() == {"dense": False, "sparse": True}
+    # No fitted parameters and no curve, so the feature drops out of the figures and
+    # FunClu the same way other features that cannot be fitted do.
+    assert tables["curve_params"].loc["sparse", "n_positive"] == 0
+    assert tables["curve_params"].loc["sparse", ["a", "b"]].isna().all()
+    assert tables["curve_sample"]["sparse"].isna().all()
+    assert np.isfinite(tables["curve_sample"]["dense"]).all()
+    # The observations are unchanged, so the feature stays in quasi_dynamic.
+    pd.testing.assert_frame_equal(tables["quasi_dynamic"], plain["quasi_dynamic"])
+    assert np.isfinite(plain["curve_sample"]["sparse"]).all()
+
+
+def test_excluded_features_are_left_out_of_funclu_input():
+    names = ["first", "second"]
+    fitted = {
+        name: fit_uploaded_csv(SPARSE_CSV, n_samples=10, trim_percent=0, min_nonzero=6)
+        for name in names
+    }
+    _, valid = observed_condition_frames(
+        {name: fitted[name]["quasi_dynamic"] for name in names},
+        {name: fitted[name]["curve_sample"] for name in names},
+        names,
+    )
+    assert valid == ["dense"]
+
+
+def test_min_nonzero_end_to_end(client):
+    datasets = [
+        upload_csv(client, "sparse_a.csv", SPARSE_CSV),
+        upload_csv(client, "sparse_b.csv", SPARSE_CSV),
+    ]
+    run = create_run(
+        client,
+        {
+            "data_mode": "quasi_dynamic",
+            "n_samples": 10,
+            "trim_percent": 0,
+            "min_nonzero": 6,
+        },
+        datasets,
+    )
+    assert execute_run(run["id"]) == 0
+    detail = client.get(f"/api/runs/{run['id']}").json()
+    assert detail["status"] == "succeeded", detail.get("error_text")
+
+    summary = artifact(detail, "curve_fitting_summary.json")
+    payload = json.loads(client.get(f"/api/artifacts/{summary['id']}/download").content)
+    assert payload["params"]["min_nonzero"] == 6
+    assert [item["below_min_nonzero"] for item in payload["files"]] == [["sparse"], ["sparse"]]
+    assert [item["features_fitted"] for item in payload["files"]] == [1, 1]
+
+    for name in ("charts/sparse_a/curve_fitting.html", "charts/compare.html"):
+        chart = artifact(detail, name)
+        html = client.get(f"/api/artifacts/{chart['id']}/content").text
+        assert '"name": "dense"' in html, name
+        assert '"name": "sparse"' not in html, name
 
 
 def test_duplicate_condition_names_fail(client):

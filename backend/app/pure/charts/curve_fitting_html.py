@@ -169,6 +169,9 @@ TEMPLATE = r"""<!DOCTYPE html>
 </div>
 <script>
 const DATA = __DATA__;
+const MASK_COLOR = "#9aa3ad";
+const HAS_MASKED = DATA.panels.some(p =>
+  ((p.series && p.series.length) ? p.series : [p]).some(ser => (ser.masked || []).length));
 const NS = "http://www.w3.org/2000/svg";
 const PT_PER_MM = 72 / 25.4;
 const el = (n, a = {}) => { const e = document.createElementNS(NS, n);
@@ -250,7 +253,7 @@ function buildSvg() {
 
   const seriesOf = p => p.series && p.series.length ? p.series : [{
     label: null, xs: p.xs, ys: p.ys, curveX: p.curveX, curveY: p.curveY,
-    dcolor: s.dcolor, ccolor: s.ccolor,
+    masked: p.masked, dcolor: s.dcolor, ccolor: s.ccolor,
   }];
   let xlo = Infinity, xhi = -Infinity, shared = [Infinity, -Infinity];
   const per = [];
@@ -349,9 +352,23 @@ function buildSvg() {
       marks.appendChild(el("path", {d: line, fill: "none",
                                     stroke: ser.ccolor || s.ccolor,
                                     "stroke-width": s.lw, "stroke-linecap": "butt"}));
-      ser.xs.forEach((cx, k) => marks.appendChild(el("circle", {
-        cx: x(cx), cy: y(ser.ys[k]), r: s.msize / 2, fill: "none",
-        stroke: ser.dcolor || s.dcolor, "stroke-width": s.lw * 0.75})));
+      const masked = new Set(ser.masked || []);
+      ser.xs.forEach((cx, k) => {
+        const px = x(cx), py = y(ser.ys[k]);
+        if (masked.has(k)) {
+          // Left out of the fit (raw value 0): a gray cross the size of a marker.
+          const h = s.msize * 0.38;
+          marks.appendChild(el("path", {
+            d: `M${(px - h).toFixed(2)},${(py - h).toFixed(2)} L${(px + h).toFixed(2)},${(py + h).toFixed(2)} ` +
+               `M${(px - h).toFixed(2)},${(py + h).toFixed(2)} L${(px + h).toFixed(2)},${(py - h).toFixed(2)}`,
+            fill: "none", stroke: MASK_COLOR, "stroke-width": s.lw * 0.75,
+            "stroke-linecap": "round"}));
+        } else {
+          marks.appendChild(el("circle", {
+            cx: px, cy: py, r: s.msize / 2, fill: "none",
+            stroke: ser.dcolor || s.dcolor, "stroke-width": s.lw * 0.75}));
+        }
+      });
     });
     svg.appendChild(marks);
 
@@ -435,7 +452,8 @@ function render() {
     `画布 ${(W / PT_PER_MM).toFixed(0)} × ${(H / PT_PER_MM).toFixed(0)} mm · ` +
     `子图 ${(built.cellW / PT_PER_MM).toFixed(0)} × ${(built.cellH / PT_PER_MM).toFixed(0)} mm · ` +
     `显示 ${built.shown} / ${DATA.panels.length} 个特征 · ${W.toFixed(0)} × ${H.toFixed(0)} pt · ` +
-    (s.autocrop ? "自适应留白" : "固定留白");
+    (s.autocrop ? "自适应留白" : "固定留白") +
+    (HAS_MASKED ? " · 灰色 × 为原始值为 0、未参与拟合的观测" : "");
   updatePager();
 }
 
@@ -542,19 +560,31 @@ render();
 """
 
 
-def build_panels(quasi, samples, features: Iterable[str]) -> list[dict[str, Any]]:
-    """Pack the two fitted tables into the renderer's panel payload."""
+def _masked_indices(masked, name) -> list[int]:
+    """Row positions of observations left out of the fit (raw value 0)."""
+    return [i for i, flag in enumerate(masked[name].tolist()) if flag]
+
+
+def build_panels(quasi, samples, features: Iterable[str], masked=None) -> list[dict[str, Any]]:
+    """Pack the two fitted tables into the renderer's panel payload.
+
+    ``masked`` (optional, aligned with ``quasi``) flags observations that were
+    left out of the fit; the figure draws them as gray crosses.
+    """
     x_all = [round(float(v), 4) for v in quasi.index]
     cx_all = [round(float(v), 4) for v in samples.index]
     panels = []
     for name in features:
-        panels.append({
+        panel = {
             "name": str(name),
             "xs": x_all,
             "ys": [round(float(v), 4) for v in quasi[name]],
             "curveX": cx_all,
             "curveY": [round(float(v), 4) for v in samples[name]],
-        })
+        }
+        if masked is not None:
+            panel["masked"] = _masked_indices(masked, name)
+        panels.append(panel)
     return panels
 
 
@@ -562,13 +592,19 @@ COMPARE_SCATTER_COLORS = ("#F9B3AD", "#C9A1CA", "#76C2AF", "#E5C68F", "#C59FCE",
 COMPARE_CURVE_COLORS = ("#9E2223", "#A06EA5", "#52B793", "#DDB866", "#B488C2", "#79C6DF")
 
 
-def build_compare_panels(scatter_frames, curve_frames, labels, features) -> list[dict[str, Any]]:
+def build_compare_panels(
+    scatter_frames, curve_frames, labels, features, masked_frames=None
+) -> list[dict[str, Any]]:
     """One panel per feature, one series per input file (markers + fitted curve)."""
+    if masked_frames is None:
+        masked_frames = [None] * len(scatter_frames)
     panels = []
     for name in features:
         series = []
-        for i, (scatter, curve, label) in enumerate(zip(scatter_frames, curve_frames, labels)):
-            series.append({
+        for i, (scatter, curve, label, masked) in enumerate(
+            zip(scatter_frames, curve_frames, labels, masked_frames)
+        ):
+            entry = {
                 "label": str(label),
                 "xs": [round(float(v), 4) for v in scatter.index],
                 "ys": [round(float(v), 4) for v in scatter[name]],
@@ -576,7 +612,10 @@ def build_compare_panels(scatter_frames, curve_frames, labels, features) -> list
                 "curveY": [round(float(v), 4) for v in curve[name]],
                 "dcolor": COMPARE_SCATTER_COLORS[i % len(COMPARE_SCATTER_COLORS)],
                 "ccolor": COMPARE_CURVE_COLORS[i % len(COMPARE_CURVE_COLORS)],
-            })
+            }
+            if masked is not None:
+                entry["masked"] = _masked_indices(masked, name)
+            series.append(entry)
         panels.append({"name": str(name), "series": series})
     return panels
 

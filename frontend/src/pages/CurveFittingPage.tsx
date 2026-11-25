@@ -11,6 +11,7 @@ import {
   Segmented,
   Select,
   Space,
+  Switch,
   Typography,
   Upload,
 } from "antd";
@@ -32,6 +33,8 @@ interface FormValues {
   second_transform: string;
   n_samples: number;
   trim_percent: number;
+  mask_zeros: boolean;
+  min_nonzero: number;
   swt_wavelet: string;
   swt_level: number;
   swt_alpha: number;
@@ -96,6 +99,8 @@ export default function CurveFittingPage() {
             second_transform: values.second_transform,
             n_samples: values.n_samples,
             trim_percent: values.trim_percent,
+            mask_zeros: values.mask_zeros,
+            min_nonzero: values.min_nonzero ?? 0,
           };
       const run = await api.createRun({
         task_key: "curve_fitting.fit",
@@ -175,6 +180,8 @@ export default function CurveFittingPage() {
                 second_transform: "Log10_1p",
                 n_samples: 30,
                 trim_percent: 1.0,
+                mask_zeros: false,
+                min_nonzero: 0,
                 swt_wavelet: "rbio3.9",
                 swt_level: 2,
                 swt_alpha: 0.5,
@@ -238,6 +245,25 @@ export default function CurveFittingPage() {
                   <Col span={12}>
                     <Form.Item label={t("fitting.trimPercent")} name="trim_percent">
                       <InputNumber min={0} max={99} step={0.5} style={{ width: "100%" }} />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item
+                      label={t("fitting.minNonzero")}
+                      name="min_nonzero"
+                      extra={t("fitting.minNonzeroHelp")}
+                    >
+                      <InputNumber min={0} max={10000} precision={0} style={{ width: "100%" }} />
+                    </Form.Item>
+                  </Col>
+                  <Col span={24}>
+                    <Form.Item
+                      label={t("fitting.maskZeros")}
+                      name="mask_zeros"
+                      valuePropName="checked"
+                      extra={t("fitting.maskZerosHelp")}
+                    >
+                      <Switch />
                     </Form.Item>
                   </Col>
                 </Row>

@@ -21,6 +21,8 @@ class CurveFittingParams(BaseModel):
     second_transform: Literal["None", "Z_min_add1", "Log10_1p", "Minmax_0_1"] = "Log10_1p"
     n_samples: int = Field(default=30, ge=2, le=10000)
     trim_percent: float = Field(default=1.0, ge=0, lt=100)
+    mask_zeros: bool = False
+    min_nonzero: int = Field(default=0, ge=0, le=10000)
     swt_wavelet: Literal["rbio3.9", "db4", "sym8", "coif3", "bior3.9"] = "rbio3.9"
     swt_level: int = Field(default=2, ge=1, le=10)
     swt_alpha: float = Field(default=0.5, ge=0, le=5)
@@ -52,6 +54,11 @@ def _finite_features(quasi, samples) -> list[str]:
     values = samples.to_numpy(dtype=float)
     mask = np.isfinite(values).all(axis=0)
     return [str(column) for column, keep in zip(quasi.columns, mask) if keep]
+
+
+def _preview_names(names: list[str], limit: int = 20) -> str:
+    shown = ", ".join(names[:limit])
+    return shown + (", ..." if len(names) > limit else "")
 
 
 def _run_curve_fitting(ctx: TaskContext) -> None:
@@ -110,6 +117,8 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                 second_transform=params.second_transform,
                 n_samples=params.n_samples,
                 trim_percent=params.trim_percent,
+                mask_zeros=params.mask_zeros,
+                min_nonzero=params.min_nonzero,
                 swt_wavelet=params.swt_wavelet,
                 swt_level=params.swt_level,
                 swt_alpha=params.swt_alpha,
@@ -126,6 +135,20 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
         results[item.filename] = tables
         quasi = tables["quasi_dynamic"]
         samples = tables["curve_sample"]
+        masked = tables.get("masked")
+        below = tables.get("below_min_nonzero")
+        excluded = (
+            [] if below is None else [str(name) for name in below.index[below.to_numpy()]]
+        )
+        if excluded:
+            ctx.log(
+                "curve_fitting.message.below_min_nonzero",
+                level="warning",
+                name=item.filename,
+                count=len(excluded),
+                min_nonzero=params.min_nonzero,
+                features=_preview_names(excluded),
+            )
         summary_files.append(
             {
                 "name": item.filename,
@@ -133,6 +156,8 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                 "features": int(quasi.shape[1]),
                 "features_fitted": _finite_feature_count(samples),
                 "sample_points": int(len(samples)),
+                "masked_points": int(masked.to_numpy().sum()) if masked is not None else 0,
+                "below_min_nonzero": excluded,
             }
         )
 
@@ -257,6 +282,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                 tables["quasi_dynamic"],
                 tables["curve_sample"],
                 features,
+                masked=tables.get("masked"),
             )
             html = curve_fitting_html.render(panels)
             path = write_text(
@@ -285,6 +311,7 @@ def _run_curve_fitting(ctx: TaskContext) -> None:
                     [tables["curve_sample"].loc[:, common] for tables in results.values()],
                     list(results),
                     common,
+                    masked_frames=[tables.get("masked") for tables in results.values()],
                 )
                 html = curve_fitting_html.render(panels)
                 path = write_text(ctx.output_dir / "charts" / "compare.html", html)

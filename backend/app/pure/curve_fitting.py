@@ -48,6 +48,8 @@ def fit_uploaded_csv(
     first_transform: str = "Z_min_add1",
     second_transform: str = "Log10_1p", n_samples: int = 30,
     trim_percent: float = 1.0,
+    mask_zeros: bool = False,
+    min_nonzero: int = 0,
     swt_wavelet: str = SWT_DEFAULT_WAVELET,
     swt_level: int = SWT_DEFAULT_LEVEL,
     swt_alpha: float = SWT_DEFAULT_ALPHA,
@@ -58,7 +60,13 @@ def fit_uploaded_csv(
     -------
     dict
         键固定为 ``quasi_dynamic`` / ``curve_params`` / ``curve_sample``，
-        但 dynamic 模式下含义见模块 docstring。
+        但 dynamic 模式下含义见模块 docstring。quasi_dynamic 模式且
+        ``mask_zeros=True`` 时多一个 ``masked`` 布尔表（与 quasi_dynamic 对齐）：
+        原始值（变换前）为 0 的观测不参与幂律拟合，供绘图标记；拟动态时间
+        与 quasi_dynamic 表本身不变。``min_nonzero > 0`` 时多一个 ``below_min_nonzero``
+        布尔序列（按特征）：变换前非零观测少于该数的特征不参与拟合，其 curve_params
+        行与 curve_sample 列为 NaN（与 power_fitting 对观测不足特征的约定一致），
+        quasi_dynamic 表不变。
     """
     original = pd.read_csv(io.BytesIO(content), index_col=0)
     if original.empty or original.columns.has_duplicates:
@@ -84,15 +92,36 @@ def fit_uploaded_csv(
 
     if not 0 <= trim_percent < 100:
         raise ValueError("去除比例必须在 0（含）到 100（不含）之间。")
+    if min_nonzero < 0:
+        raise ValueError("非零观测下限不能为负数。")
     transformed = preprocess(preprocess(original, first_transform), second_transform)
     sums = transformed.sum(axis=1).to_numpy()
     order = np.argsort(sums, kind="stable")
     quasi = transformed.iloc[order].copy()
     quasi.index = pd.Index(np.log1p(sums[order]), name="quasi time")
-    quasi = quasi.loc[quasi.index > 0]
-    quasi = quasi.iloc[int(trim_percent / 100 * len(quasi)):]
-    params, samples = power_fitting(quasi, n_samples=n_samples)
-    return {"quasi_dynamic": quasi, "curve_params": params, "curve_sample": samples}
+    # 变换前的原始数值，与 quasi 按相同的排序、过滤和去除首行对齐。
+    raw = original.apply(pd.to_numeric, errors="coerce").iloc[order]
+    raw.index = quasi.index
+    keep = np.asarray(quasi.index > 0)
+    quasi, raw = quasi.loc[keep], raw.loc[keep]
+    start = int(trim_percent / 100 * len(quasi))
+    quasi, raw = quasi.iloc[start:], raw.iloc[start:]
+    zeros = raw.eq(0)
+    # 非零观测：变换前为有限且不等于 0 的值。少于门槛的特征整列不参与拟合。
+    nonzero = (raw.notna() & raw.ne(0)).sum(axis=0)
+    below = nonzero < min_nonzero
+    unfitted = list(below.index[below.to_numpy()])
+    # power_fitting 逐特征忽略非有限值，因此被屏蔽的观测和未拟合特征置为 NaN 即可。
+    fit_input = quasi.where(~zeros.to_numpy()) if mask_zeros else quasi.copy()
+    if unfitted:
+        fit_input[unfitted] = np.nan
+    params, samples = power_fitting(fit_input, n_samples=n_samples)
+    tables = {"quasi_dynamic": quasi, "curve_params": params, "curve_sample": samples}
+    if mask_zeros:
+        tables["masked"] = zeros
+    if min_nonzero > 0:
+        tables["below_min_nonzero"] = below
+    return tables
 
 
 def build_fitting_export(results: dict[str, dict[str, pd.DataFrame]]) -> bytes:
