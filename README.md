@@ -59,7 +59,8 @@ Open http://localhost:5173.
 - Phase 1: Curve Fitting — quasi-dynamic power fitting and dynamic SWT denoising, with the export ZIP, publication-grade HTML figures (per-lead ECG figures in the upstream full-record/zoom style), and table downloads.
 - Phase 2: FunClu — EM functional clustering with a FunClu-K export ZIP and cluster-profile HTML, plus a BIC scan over K × S1–S4 covariance structures (best of n_init starts, AIC/ΔBIC/selected table, comparison plot) that can be cancelled at K boundaries.
 - Phase 3: NetRecon single-layer — ASGL, static idop and dynamic idopECG reconstruction with an interactive network HTML (offline vis-network), effect-decomposition HTML, adjacency heatmap HTML, and the `single_layer_idopnetwork_export.zip` contract.
-- Later phases: NetRecon multi-layer, NetAnal, and platform hardening.
+- Phase 4: NetRecon multi-layer — inter-module and intra-module networks from a FunClu-K export, with a publication HTML overview matrix, per-network interactive HTML, skipped-network reporting, and `multi_layer_idopnetwork_export.zip`.
+- Later phases: NetAnal and platform hardening.
 
 ### FunClu engine
 

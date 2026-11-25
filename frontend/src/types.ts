@@ -108,6 +108,7 @@ export interface InspectResult {
   conditions: string[];
   members: string[];
   features?: number | null;
+  clusters?: string[];
 }
 
 export interface ArtifactTable {

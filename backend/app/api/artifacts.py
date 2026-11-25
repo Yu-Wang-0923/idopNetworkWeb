@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
 from ..db import get_db
-from ..file_inspect import curve_feature_count
+from ..file_inspect import curve_feature_count, funclu_clusters
 from ..models import Artifact, Workspace
 from ..schemas import ArtifactOut
 from ..serializers import artifact_out
@@ -141,4 +141,7 @@ def inspect_artifact(
         "features": curve_feature_count(path)
         if artifact.semantic_type == "curve_fitting_export"
         else None,
+        "clusters": funclu_clusters(path)
+        if artifact.semantic_type == "funclu_k_export"
+        else [],
     }

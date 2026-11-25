@@ -54,6 +54,41 @@ def create_run(client, params: dict, dataset: dict) -> dict:
     return response.json()
 
 
+def create_funclu_run(client, dataset: dict) -> dict:
+    response = client.post(
+        "/api/runs",
+        json={
+            "task_key": "funclu.k",
+            "params": {
+                "n_components": 2,
+                "max_iter": 200,
+                "tol": 1e-4,
+                "random_state": 42,
+            },
+            "inputs": [
+                {"role": "curve_zip", "ordinal": 0, "dataset_id": dataset["id"]}
+            ],
+        },
+    )
+    assert response.status_code == 202, response.text
+    return response.json()
+
+
+def create_multi_run(client, params: dict, artifact_id: str) -> dict:
+    response = client.post(
+        "/api/runs",
+        json={
+            "task_key": "netrecon.multi",
+            "params": params,
+            "inputs": [
+                {"role": "funclu_zip", "ordinal": 0, "artifact_id": artifact_id}
+            ],
+        },
+    )
+    assert response.status_code == 202, response.text
+    return response.json()
+
+
 def artifact(detail: dict, logical_name: str) -> dict:
     return next(
         item for item in detail["artifacts"] if item["logical_name"] == logical_name
@@ -177,3 +212,73 @@ def test_netrecon_single_dynamic_end_to_end(client):
     )
     assert summary["algorithm"] == "dynamic_idop"
     assert summary["solver_version"]
+
+
+def test_netrecon_multi_end_to_end(client):
+    dataset = upload_zip(client, curve_zip_bytes())
+    funclu_run = create_funclu_run(client, dataset)
+    assert execute_run(funclu_run["id"]) == 0
+    funclu_detail = client.get(f"/api/runs/{funclu_run['id']}").json()
+    assert funclu_detail["status"] == "succeeded", funclu_detail.get("error_text")
+    export = artifact(funclu_detail, "funclu_k_export.zip")
+
+    run = create_multi_run(
+        client,
+        {
+            "algorithm": "asgl",
+            "max_order": 1,
+            "nonneg_self": True,
+            "adjacency_aggregation": "mean",
+            "scope": "all",
+            "clusters": [],
+            "member_cap": 0,
+            "top_edges": 0,
+        },
+        export["id"],
+    )
+    assert execute_run(run["id"]) == 0
+    detail = client.get(f"/api/runs/{run['id']}").json()
+    assert detail["status"] == "succeeded", detail.get("error_text")
+    names = {item["logical_name"] for item in detail["artifacts"]}
+    assert "multi_layer_idopnetwork_export.zip" in names
+    assert "charts/multilayer_overview.html" in names
+    assert "tables/network_summary.csv" in names
+    assert "multilayer_summary.json" in names
+    assert any(name.startswith("charts/networks/inter/") for name in names)
+    assert any(name.startswith("charts/networks/intra/") for name in names)
+
+    archive = artifact(detail, "multi_layer_idopnetwork_export.zip")
+    download = client.get(f"/api/artifacts/{archive['id']}/download")
+    with zipfile.ZipFile(io.BytesIO(download.content)) as zipped:
+        members = set(zipped.namelist())
+        assert "metadata/labels.csv" in members
+        assert any(
+            name.startswith("inter_cluster/") and name.endswith("adjacency_matrix.csv")
+            for name in members
+        )
+        assert any(
+            name.startswith("intra_cluster/") and name.endswith("adjacency_matrix.csv")
+            for name in members
+        )
+
+    overview = artifact(detail, "charts/multilayer_overview.html")
+    html = client.get(f"/api/artifacts/{overview['id']}/content").text
+    assert "Multilayer IdopNetwork overview" in html
+    assert "Inter-module" in html
+
+    summary = json.loads(
+        client.get(
+            f"/api/artifacts/{artifact(detail, 'multilayer_summary.json')['id']}/download"
+        ).content
+    )
+    assert summary["scope"] == "all"
+    assert summary["n_inter_networks"] >= 1
+    assert summary["n_intra_networks"] >= 1
+
+    table = client.get(
+        f"/api/artifacts/{artifact(detail, 'tables/network_summary.csv')['id']}/download"
+    ).content
+    frame = pd.read_csv(io.BytesIO(table))
+    assert {"layer", "condition", "cluster", "n_nodes", "n_edges"} <= set(
+        frame.columns
+    )

@@ -51,6 +51,8 @@ PAGE_STYLE = """
   html,body{margin:0;background:#fff;color:#1a1a1a}
   body{font:12px/1.4 Helvetica,Arial,"DejaVu Sans",sans-serif}
   .page{max-width:1120px;margin:0 auto;padding:8px 14px 24px}
+  .head h1{font-size:16px;margin:2px 0 4px}
+  .head p{margin:0 0 10px;color:#555;font-size:12px}
   .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
            margin:0 0 10px;padding:4px 2px 8px;border-bottom:1px solid #e5e8ee}
   .toolbar .spacer{flex:1}
@@ -63,6 +65,7 @@ PAGE_STYLE = """
   .toolbar .counter{color:#666;font-size:12px;font-variant-numeric:tabular-nums}
   .effect-page[hidden]{display:none}
   .effect-page svg{display:block;width:100%;height:auto;background:#fff}
+  .page > svg{display:block;width:auto;max-width:100%;height:auto;margin:0 auto}
   @media print{
     .toolbar{display:none}
     .page{max-width:none;padding:0}
@@ -98,6 +101,10 @@ def _decimals(step: float) -> int:
 def _fmt(value: float, decimals: int) -> str:
     text = f"{value:.{decimals}f}"
     return "0" if text in {"-0", "-0.0", "-0.00"} else text
+
+
+def _short_label(name: str, limit: int = 18) -> str:
+    return name if len(name) <= limit else name[: limit - 1] + "…"
 
 
 def _wrap_label(name: str, limit: int = 22) -> list[str]:
@@ -558,4 +565,242 @@ def render_heatmap(
         '<main class="page"><div class="head">'
         f"<h1>{escape(title)}</h1>{note}</div>"
         f"{''.join(parts)}</main></body></html>"
+    )
+
+
+OVERVIEW_PANEL_W = 210.0
+OVERVIEW_PANEL_H = 160.0
+OVERVIEW_ROW_LABEL = 92.0
+OVERVIEW_HEADER = 34.0
+OVERVIEW_MARGIN = 18.0
+OVERVIEW_GAP = 8.0
+
+OVERVIEW_SCRIPT = """
+(function () {
+  var svg = document.getElementById("ml-overview");
+  function download(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = name;
+    anchor.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  function serialized() {
+    var clone = svg.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    return new XMLSerializer().serializeToString(clone);
+  }
+  document.getElementById("ml-svg").addEventListener("click", function () {
+    download(new Blob([serialized()], {type: "image/svg+xml"}), "multilayer_overview.svg");
+  });
+  document.getElementById("ml-png").addEventListener("click", function () {
+    var text = serialized();
+    var image = new Image();
+    image.onload = function () {
+      var viewBox = svg.getAttribute("viewBox").split(/\\s+/).map(Number);
+      var dpi = Number(document.getElementById("ml-dpi").value);
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.round(viewBox[2] / 72 * dpi);
+      canvas.height = Math.round(viewBox[3] / 72 * dpi);
+      var context = canvas.getContext("2d");
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(function (blob) {
+        download(blob, "multilayer_overview_" + dpi + "dpi.png");
+      }, "image/png");
+    };
+    image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(text);
+  });
+})();
+"""
+
+
+def _overview_panel(adjacency: pd.DataFrame, *, max_labels: int = 12) -> str:
+    nodes = [str(node) for node in adjacency.index]
+    size = len(nodes)
+    if size == 0:
+        return ""
+    values = adjacency.to_numpy(dtype=float)
+    positions = {}
+    radius = min(OVERVIEW_PANEL_W, OVERVIEW_PANEL_H) * 0.34
+    center_x = OVERVIEW_PANEL_W / 2
+    center_y = OVERVIEW_PANEL_H / 2
+    for index, node in enumerate(nodes):
+        angle = 2.0 * math.pi * index / size - math.pi / 2
+        positions[node] = (
+            center_x + radius * math.cos(angle),
+            center_y + radius * math.sin(angle),
+        )
+    offdiag = values.copy()
+    np.fill_diagonal(offdiag, 0.0)
+    max_abs = float(np.max(np.abs(offdiag))) if np.isfinite(offdiag).any() else 1.0
+    max_abs = max_abs if max_abs > 1e-12 else 1.0
+    parts = [
+        f'<rect x="0" y="0" width="{OVERVIEW_PANEL_W:.0f}" '
+        f'height="{OVERVIEW_PANEL_H:.0f}" fill="#ffffff" stroke="#e3e8ef" '
+        f'stroke-width="0.7"/>'
+    ]
+    edge_count = 0
+    for row, source in enumerate(nodes):
+        for column, target in enumerate(nodes):
+            if row == column:
+                continue
+            weight = float(values[row, column])
+            if not np.isfinite(weight) or abs(weight) < 1e-12:
+                continue
+            edge_count += 1
+            x1, y1 = positions[source]
+            x2, y2 = positions[target]
+            ratio = min(1.0, abs(weight) / max_abs)
+            width = 0.45 + 1.15 * math.sqrt(ratio)
+            color = "#B2182B" if weight > 0 else "#2166AC"
+            parts.append(
+                f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                f'stroke="{color}" stroke-width="{width:.2f}" stroke-opacity="0.62"/>'
+            )
+    for node in nodes:
+        x, y = positions[node]
+        parts.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.6" fill="#ffffff" '
+            f'stroke="#4B5563" stroke-width="0.7"><title>{escape(node)}</title></circle>'
+        )
+        if size <= max_labels:
+            anchor = "start" if x >= center_x else "end"
+            dx = 3.5 if x >= center_x else -3.5
+            parts.append(
+                f'<text x="{x + dx:.1f}" y="{y + 2.2:.1f}" '
+                f'text-anchor="{anchor}" font-size="6" fill="#333">'
+                f"{escape(_short_label(node, 18))}</text>"
+            )
+    parts.append(
+        f'<text x="4" y="{OVERVIEW_PANEL_H - 4:.0f}" font-size="6" fill="#666">'
+        f"{size} nodes · {edge_count} edges</text>"
+    )
+    return "".join(parts)
+
+
+def render_multilayer_overview(
+    inter_cluster: dict[str, pd.DataFrame],
+    intra_cluster: dict[str, dict[str, pd.DataFrame]],
+    *,
+    conditions: list[str] | None = None,
+    modules: list[str] | None = None,
+    title: str = "Multilayer IdopNetwork overview",
+    subtitle: str = "",
+) -> str:
+    """Publication matrix of inter-module and intra-module networks."""
+    condition_names = list(
+        conditions
+        if conditions is not None
+        else dict.fromkeys([*inter_cluster, *intra_cluster])
+    )
+    module_names = list(
+        modules
+        if modules is not None
+        else sorted({module for cluster_map in intra_cluster.values() for module in cluster_map})
+    )
+    if not condition_names:
+        raise ValueError("No condition has a fitted network to plot")
+    rows = [None, *module_names]
+    columns = len(condition_names)
+    width = (
+        2 * OVERVIEW_MARGIN
+        + OVERVIEW_ROW_LABEL
+        + columns * OVERVIEW_PANEL_W
+        + (columns - 1) * OVERVIEW_GAP
+    )
+    height = (
+        OVERVIEW_MARGIN
+        + 40
+        + OVERVIEW_HEADER
+        + len(rows) * OVERVIEW_PANEL_H
+        + (len(rows) - 1) * OVERVIEW_GAP
+        + 64
+    )
+    parts = [
+        f'<svg id="ml-overview" xmlns="http://www.w3.org/2000/svg" '
+        f'viewBox="0 0 {width:.0f} {height:.0f}" width="{width:.0f}pt" '
+        f'height="{height:.0f}pt" font-family="Helvetica, Arial, sans-serif" '
+        f'role="img" aria-label="{escape(title)}">',
+        f'<rect x="0" y="0" width="{width:.0f}" height="{height:.0f}" fill="#ffffff"/>',
+        f'<text x="{OVERVIEW_MARGIN:.1f}" y="20" font-size="13" font-weight="700">'
+        f"{escape(title)}</text>",
+        f'<text x="{OVERVIEW_MARGIN:.1f}" y="34" font-size="9" fill="#444">'
+        f"{escape(subtitle)}</text>",
+    ]
+    grid_left = OVERVIEW_MARGIN + OVERVIEW_ROW_LABEL
+    grid_top = OVERVIEW_MARGIN + 40
+    for column, condition in enumerate(condition_names):
+        x = grid_left + column * (OVERVIEW_PANEL_W + OVERVIEW_GAP)
+        parts.append(
+            f'<rect x="{x:.1f}" y="{grid_top:.1f}" width="{OVERVIEW_PANEL_W:.0f}" '
+            f'height="{OVERVIEW_HEADER:.0f}" fill="#F3F6FA" stroke="#e3e8ef" '
+            f'stroke-width="0.7"/>'
+        )
+        parts.append(
+            f'<text x="{x + OVERVIEW_PANEL_W / 2:.1f}" '
+            f'y="{grid_top + OVERVIEW_HEADER / 2 + 3:.1f}" text-anchor="middle" '
+            f'font-size="8.5" font-weight="600">{escape(condition)}</text>'
+        )
+    for row, module in enumerate(rows):
+        y = grid_top + OVERVIEW_HEADER + row * (OVERVIEW_PANEL_H + OVERVIEW_GAP)
+        label = "Inter-module" if module is None else module
+        parts.append(
+            f'<text x="{grid_left - 8:.1f}" y="{y + OVERVIEW_PANEL_H / 2:.1f}" '
+            f'text-anchor="end" font-size="9" font-weight="600">{escape(label)}</text>'
+        )
+        for column, condition in enumerate(condition_names):
+            x = grid_left + column * (OVERVIEW_PANEL_W + OVERVIEW_GAP)
+            if module is None:
+                frame = inter_cluster.get(condition)
+            else:
+                frame = intra_cluster.get(condition, {}).get(module)
+            if frame is None or frame.empty:
+                parts.append(
+                    f'<rect x="{x:.1f}" y="{y:.1f}" width="{OVERVIEW_PANEL_W:.0f}" '
+                    f'height="{OVERVIEW_PANEL_H:.0f}" fill="#FAFAFA" '
+                    f'stroke="#e3e8ef" stroke-width="0.7"/>'
+                )
+                parts.append(
+                    f'<text x="{x + OVERVIEW_PANEL_W / 2:.1f}" '
+                    f'y="{y + OVERVIEW_PANEL_H / 2:.1f}" text-anchor="middle" '
+                    f'font-size="8" fill="#999">—</text>'
+                )
+                continue
+            parts.append(f'<g transform="translate({x:.1f} {y:.1f})">')
+            parts.append(_overview_panel(frame))
+            parts.append("</g>")
+    legend_y = height - 24
+    parts.append(
+        f'<line x1="{OVERVIEW_MARGIN}" y1="{legend_y}" x2="{OVERVIEW_MARGIN + 26}" '
+        f'y2="{legend_y}" stroke="#B2182B" stroke-width="1.4"/>'
+    )
+    parts.append(
+        f'<text x="{OVERVIEW_MARGIN + 32}" y="{legend_y + 3}" font-size="8.5">'
+        f"positive edge</text>"
+    )
+    parts.append(
+        f'<line x1="{OVERVIEW_MARGIN + 120}" y1="{legend_y}" '
+        f'x2="{OVERVIEW_MARGIN + 146}" y2="{legend_y}" stroke="#2166AC" '
+        f'stroke-width="1.4"/>'
+    )
+    parts.append(
+        f'<text x="{OVERVIEW_MARGIN + 152}" y="{legend_y + 3}" font-size="8.5">'
+        f"negative edge · circular layout · labels for ≤12 nodes</text>"
+    )
+    parts.append("</svg>")
+    return (
+        "<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>{escape(title)}</title><style>{PAGE_STYLE}</style></head><body>"
+        '<main class="page"><div class="toolbar">'
+        '<span class="spacer"></span>'
+        '<select id="ml-dpi" aria-label="DPI"><option value="300" selected>300 dpi</option>'
+        '<option value="600">600 dpi</option></select>'
+        '<button type="button" id="ml-svg">Export SVG</button>'
+        '<button type="button" id="ml-png">Export PNG</button>'
+        "</div>"
+        f"{''.join(parts)}</main><script>{OVERVIEW_SCRIPT}</script></body></html>"
     )

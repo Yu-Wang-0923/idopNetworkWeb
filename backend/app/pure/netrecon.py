@@ -413,3 +413,235 @@ def build_network_html(
         html = html.replace("</head>", _SAFE_STORAGE + "</head>", 1)
     path.write_text(html, encoding="utf-8")
     return path
+
+
+def load_funclu_export(
+    zip_bytes: bytes,
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    dict[str, pd.DataFrame],
+    dict[str, pd.DataFrame],
+    dict[str, dict[str, pd.DataFrame]],
+    dict[str, dict[str, pd.DataFrame]],
+]:
+    """Read multilayer curves/responses from a FunClu-K export ZIP."""
+    labels_df: pd.DataFrame | None = None
+    cluster_sizes_df: pd.DataFrame | None = None
+    centers: dict[str, pd.DataFrame] = {}
+    center_responses: dict[str, pd.DataFrame] = {}
+    members: dict[str, dict[str, pd.DataFrame]] = {}
+    member_responses: dict[str, dict[str, pd.DataFrame]] = {}
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
+        for name in archive.namelist():
+            if name.endswith("/"):
+                continue
+            parts = name.split("/")
+            with archive.open(name) as handle:
+                if name == "labels.csv":
+                    labels_df = pd.read_csv(handle)
+                elif name == "cluster_sizes.csv":
+                    cluster_sizes_df = pd.read_csv(handle)
+                elif (
+                    len(parts) == 3
+                    and parts[0] == "cluster_centers"
+                    and parts[2] == "cluster_center_curve_sample.csv"
+                ):
+                    centers[parts[1]] = pd.read_csv(handle, index_col=0)
+                elif (
+                    len(parts) == 3
+                    and parts[0] == "cluster_centers"
+                    and parts[2] == "cluster_center_quasi_dynamic.csv"
+                ):
+                    center_responses[parts[1]] = pd.read_csv(handle, index_col=0)
+                elif (
+                    len(parts) == 3
+                    and parts[0] == "cluster_members"
+                    and parts[2].endswith("_curve_sample.csv")
+                ):
+                    cluster_name = parts[2].removesuffix("_curve_sample.csv")
+                    members.setdefault(parts[1], {})[cluster_name] = pd.read_csv(
+                        handle, index_col=0
+                    )
+                elif (
+                    len(parts) == 3
+                    and parts[0] == "cluster_members"
+                    and parts[2].endswith("_quasi_dynamic.csv")
+                ):
+                    cluster_name = parts[2].removesuffix("_quasi_dynamic.csv")
+                    member_responses.setdefault(parts[1], {})[
+                        cluster_name
+                    ] = pd.read_csv(handle, index_col=0)
+
+    if labels_df is None:
+        raise ValueError("FunClu-K export ZIP is missing labels.csv")
+    if cluster_sizes_df is None:
+        cluster_sizes_df = pd.DataFrame()
+    if not centers:
+        raise ValueError("FunClu-K export ZIP is missing cluster center curve_sample")
+    if not center_responses:
+        raise ValueError("FunClu-K export ZIP is missing cluster center quasi_dynamic")
+    if not members:
+        raise ValueError("FunClu-K export ZIP is missing cluster member curve_sample")
+    if not member_responses:
+        raise ValueError("FunClu-K export ZIP is missing cluster member quasi_dynamic")
+
+    return (
+        labels_df,
+        cluster_sizes_df,
+        dict(sorted(centers.items())),
+        dict(sorted(center_responses.items())),
+        {
+            condition: dict(sorted(cluster_map.items()))
+            for condition, cluster_map in sorted(members.items())
+        },
+        {
+            condition: dict(sorted(cluster_map.items()))
+            for condition, cluster_map in sorted(member_responses.items())
+        },
+    )
+
+
+def sort_cluster_names(names) -> list[str]:
+    def key(name: str) -> tuple[int, str]:
+        digits = "".join(char for char in str(name) if char.isdigit())
+        return (int(digits) if digits else 10**6, str(name))
+
+    return sorted({str(name) for name in names}, key=key)
+
+
+def build_multilayer_export_zip(
+    result: dict,
+    *,
+    labels_df: pd.DataFrame,
+    cluster_sizes_df: pd.DataFrame,
+) -> bytes:
+    """Build the multi_layer_idopnetwork_export.zip contract."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "metadata/labels.csv", _to_csv_utf8_sig(labels_df, index=False)
+        )
+        if not cluster_sizes_df.empty:
+            archive.writestr(
+                "metadata/cluster_sizes.csv",
+                _to_csv_utf8_sig(cluster_sizes_df, index=False),
+            )
+        for condition, network in result["inter_cluster"].items():
+            artifacts = collect_network_export_artifacts(
+                network,
+                extra_params={
+                    "layer": "inter_cluster",
+                    "condition": condition,
+                    "cluster": "",
+                    "adjacency_aggregation": network.get(
+                        "adjacency_aggregation", "mean"
+                    ),
+                },
+            )
+            base = f"inter_cluster/{condition}"
+            archive.writestr(
+                f"{base}/adjacency_matrix.csv",
+                _to_csv_utf8_sig(artifacts["adj_df"], index=True),
+            )
+            archive.writestr(
+                f"{base}/from_to.csv",
+                _to_csv_utf8_sig(artifacts["from_to_df"], index=False),
+            )
+            archive.writestr(
+                f"{base}/params.csv",
+                _to_csv_utf8_sig(artifacts["params_df"], index=False),
+            )
+            for name, table in artifacts["dynamic_tables"].items():
+                archive.writestr(
+                    f"{base}/dynamic/{name}.csv",
+                    _to_csv_utf8_sig(table, index=False),
+                )
+            for target_name, effect_df in artifacts["effect_map"].items():
+                archive.writestr(
+                    f"{base}/effect/{target_name}.csv",
+                    _to_csv_utf8_sig(effect_df, index=True),
+                )
+        for condition, cluster_map in result["intra_cluster"].items():
+            for cluster_name, network in cluster_map.items():
+                artifacts = collect_network_export_artifacts(
+                    network,
+                    extra_params={
+                        "layer": "intra_cluster",
+                        "condition": condition,
+                        "cluster": cluster_name,
+                        "adjacency_aggregation": network.get(
+                            "adjacency_aggregation", "mean"
+                        ),
+                    },
+                )
+                base = f"intra_cluster/{condition}/{cluster_name}"
+                archive.writestr(
+                    f"{base}/adjacency_matrix.csv",
+                    _to_csv_utf8_sig(artifacts["adj_df"], index=True),
+                )
+                archive.writestr(
+                    f"{base}/from_to.csv",
+                    _to_csv_utf8_sig(artifacts["from_to_df"], index=False),
+                )
+                archive.writestr(
+                    f"{base}/params.csv",
+                    _to_csv_utf8_sig(artifacts["params_df"], index=False),
+                )
+                for name, table in artifacts["dynamic_tables"].items():
+                    archive.writestr(
+                        f"{base}/dynamic/{name}.csv",
+                        _to_csv_utf8_sig(table, index=False),
+                    )
+                for target_name, effect_df in artifacts["effect_map"].items():
+                    archive.writestr(
+                        f"{base}/effect/{target_name}.csv",
+                        _to_csv_utf8_sig(effect_df, index=True),
+                    )
+        skipped_df = pd.DataFrame(result.get("skipped", []))
+        if not skipped_df.empty:
+            archive.writestr(
+                "metadata/skipped_networks.csv",
+                _to_csv_utf8_sig(skipped_df, index=False),
+            )
+    return buffer.getvalue()
+
+
+def build_network_summary(result: dict) -> pd.DataFrame:
+    """One row per fitted inter/intra network."""
+    rows = []
+    for condition, network in result["inter_cluster"].items():
+        artifacts = collect_network_export_artifacts(network)
+        rows.append(
+            {
+                "layer": "inter_cluster",
+                "condition": condition,
+                "cluster": "",
+                "n_nodes": int(network["adj_df"].shape[0]),
+                "n_edges": int(artifacts["from_to_df"].shape[0]),
+                "mse": float(network["model"].mse_)
+                if network["model"].mse_ is not None
+                else None,
+                "max_order": int(network["model"].max_order),
+                "algorithm": network.get("algorithm", ""),
+            }
+        )
+    for condition, cluster_map in result["intra_cluster"].items():
+        for cluster_name, network in cluster_map.items():
+            artifacts = collect_network_export_artifacts(network)
+            rows.append(
+                {
+                    "layer": "intra_cluster",
+                    "condition": condition,
+                    "cluster": cluster_name,
+                    "n_nodes": int(network["adj_df"].shape[0]),
+                    "n_edges": int(artifacts["from_to_df"].shape[0]),
+                    "mse": float(network["model"].mse_)
+                    if network["model"].mse_ is not None
+                    else None,
+                    "max_order": int(network["model"].max_order),
+                    "algorithm": network.get("algorithm", ""),
+                }
+            )
+    return pd.DataFrame(rows)

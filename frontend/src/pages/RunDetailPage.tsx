@@ -47,11 +47,12 @@ function isActive(status: string | undefined): boolean {
 }
 
 function chartPriority(artifact: Artifact): number {
-  if (artifact.semantic_type === "netrecon_network_html") return 0;
-  if (artifact.semantic_type === "netrecon_effect_html") return 1;
-  if (artifact.semantic_type === "netrecon_heatmap_html") return 2;
+  if (artifact.semantic_type === "netrecon_multilayer_overview_html") return 0;
+  if (artifact.semantic_type === "netrecon_network_html") return 1;
+  if (artifact.semantic_type === "netrecon_effect_html") return 2;
+  if (artifact.semantic_type === "netrecon_heatmap_html") return 3;
   if (artifact.logical_name.includes("compare")) return 9;
-  return 3;
+  return 4;
 }
 
 export default function RunDetailPage() {
@@ -347,7 +348,9 @@ export default function RunDetailPage() {
                 <HtmlArtifactFrame
                   artifactId={chartArtifact.id}
                   height={
-                    chartArtifact.semantic_type === "netrecon_network_html"
+                    chartArtifact.semantic_type === "netrecon_network_html" ||
+                    chartArtifact.semantic_type ===
+                      "netrecon_multilayer_overview_html"
                       ? 950
                       : 820
                   }
