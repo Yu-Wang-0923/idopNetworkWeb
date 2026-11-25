@@ -46,6 +46,14 @@ function isActive(status: string | undefined): boolean {
   return status === "queued" || status === "running";
 }
 
+function chartPriority(artifact: Artifact): number {
+  if (artifact.semantic_type === "netrecon_network_html") return 0;
+  if (artifact.semantic_type === "netrecon_effect_html") return 1;
+  if (artifact.semantic_type === "netrecon_heatmap_html") return 2;
+  if (artifact.logical_name.includes("compare")) return 9;
+  return 3;
+}
+
 export default function RunDetailPage() {
   const { t } = useTranslation();
   const { runId = "" } = useParams();
@@ -112,8 +120,7 @@ export default function RunDetailPage() {
       .filter((item) => item.kind === "html")
       .sort(
         (a, b) =>
-          Number(a.logical_name.includes("compare")) -
-            Number(b.logical_name.includes("compare")) ||
+          chartPriority(a) - chartPriority(b) ||
           a.logical_name.localeCompare(b.logical_name),
       );
     if (charts.length && !charts.some((item) => item.id === selectedChart)) {
@@ -144,8 +151,7 @@ export default function RunDetailPage() {
     .filter((item) => item.kind === "html")
     .sort(
       (a, b) =>
-        Number(a.logical_name.includes("compare")) -
-          Number(b.logical_name.includes("compare")) ||
+        chartPriority(a) - chartPriority(b) ||
         a.logical_name.localeCompare(b.logical_name),
     );
   const pngArtifacts = run.artifacts.filter((item) => item.kind === "png");
@@ -340,7 +346,11 @@ export default function RunDetailPage() {
               {chartArtifact ? (
                 <HtmlArtifactFrame
                   artifactId={chartArtifact.id}
-                  height={820}
+                  height={
+                    chartArtifact.semantic_type === "netrecon_network_html"
+                      ? 950
+                      : 820
+                  }
                   title={chartArtifact.logical_name}
                 />
               ) : null}
